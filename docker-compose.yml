@@ -2,15 +2,15 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: omnicodex
-      POSTGRES_PASSWORD: secret
-      POSTGRES_DB: omnicodex
+      POSTGRES_USER: ${POSTGRES_USER:-omnicodex}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      POSTGRES_DB: ${POSTGRES_DB:-omnicodex}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U omnicodex"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-omnicodex}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -29,17 +29,11 @@ services:
     build: .
     ports:
       - "3000:3000"
+    env_file: .env
     environment:
-      NODE_ENV: production
-      PORT: 3000
-      HOST: 0.0.0.0
-      DATABASE_URL: postgresql://omnicodex:secret@postgres:5432/omnicodex
+      # Override network-dependent URLs for Docker internal networking
+      DATABASE_URL: postgresql://${POSTGRES_USER:-omnicodex}:${POSTGRES_PASSWORD:-secret}@postgres:5432/${POSTGRES_DB:-omnicodex}
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: change-me-in-production
-      HMAC_TOLERANCE_SECONDS: 300
-      RATE_LIMIT_PER_USER_PER_MINUTE: 30
-      RATE_LIMIT_PER_IP_PER_MINUTE: 100
-      STORE_PLAIN_CODES: "false"
     depends_on:
       postgres:
         condition: service_healthy
