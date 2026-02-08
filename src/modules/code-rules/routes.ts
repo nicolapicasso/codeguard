@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { Charset, CheckAlgorithm, CheckDigitPos } from '@prisma/client';
 import { verifyJwt } from '../auth/jwt.js';
-import { createCodeRule, listCodeRules, getCodeRule, updateCodeRule } from './service.js';
+import { createCodeRule, listCodeRules, getCodeRule, updateCodeRule, deleteCodeRule } from './service.js';
 import { runPipeline } from '../validation/pipeline.js';
 import { createCodeRuleSchema, updateCodeRuleSchema, testCodeSchema } from './schemas.js';
 
@@ -97,6 +97,16 @@ export async function codeRuleRoutes(app: FastifyInstance): Promise<void> {
       allowedCountries: body.allowed_countries,
     });
     return reply.status(200).send(rule);
+  });
+
+  app.delete('/api/admin/rules/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const rule = await getCodeRule(id);
+    if (!rule) {
+      return reply.status(404).send({ status: 'KO', error_code: 'NOT_FOUND', error_message: 'Code rule not found' });
+    }
+    await deleteCodeRule(id);
+    return reply.status(204).send();
   });
 
   // POST /api/admin/rules/:id/test — Test code against rule (no registration)
