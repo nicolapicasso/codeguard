@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Shield } from 'lucide-react';
+import { ScanBarcode } from 'lucide-react';
 import { setToken } from '../lib/api';
 
 interface LoginProps {
@@ -41,7 +41,7 @@ export function Login({ onLogin }: LoginProps) {
     <div className="min-h-screen bg-gray-900 flex items-center justify-center">
       <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-md">
         <div className="flex items-center justify-center gap-2 mb-6">
-          <Shield className="w-8 h-8 text-brand-600" />
+          <ScanBarcode className="w-8 h-8 text-brand-600" />
           <h1 className="text-2xl font-bold text-gray-900">OmniCodex Admin</h1>
         </div>
 

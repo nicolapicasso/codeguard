@@ -7,7 +7,7 @@ import {
   TestTube,
   BarChart3,
   LogOut,
-  Shield,
+  ScanBarcode,
 } from 'lucide-react';
 import { setToken } from '../lib/api';
 import { cn } from '../lib/cn';
@@ -26,7 +26,7 @@ export function Layout() {
     <div className="flex h-screen">
       <aside className="w-64 bg-gray-900 text-white flex flex-col">
         <div className="p-4 border-b border-gray-700 flex items-center gap-2">
-          <Shield className="w-6 h-6 text-brand-400" />
+          <ScanBarcode className="w-6 h-6 text-brand-400" />
           <h1 className="text-lg font-bold">OmniCodex</h1>
           <span className="text-xs text-gray-400 ml-auto">Admin</span>
         </div>
