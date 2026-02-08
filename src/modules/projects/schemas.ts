@@ -4,8 +4,8 @@ export const createProjectSchema = {
   properties: {
     name: { type: 'string', minLength: 1 },
     description: { type: 'string' },
-    starts_at: { type: 'string', format: 'date-time' },
-    ends_at: { type: 'string', format: 'date-time' },
+    starts_at: { type: 'string' },
+    ends_at: { type: 'string' },
     metadata: { type: 'object' },
   },
 } as const;
@@ -15,8 +15,8 @@ export const updateProjectSchema = {
   properties: {
     name: { type: 'string', minLength: 1 },
     description: { type: 'string' },
-    starts_at: { type: 'string', format: 'date-time' },
-    ends_at: { type: 'string', format: 'date-time' },
+    starts_at: { type: 'string' },
+    ends_at: { type: 'string' },
     is_active: { type: 'boolean' },
     metadata: { type: 'object' },
   },

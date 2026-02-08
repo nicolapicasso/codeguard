@@ -29,7 +29,10 @@ export function Projects() {
     if (!selectedTenant) return;
     setSubmitting(true);
     try {
-      await projectsApi.create(selectedTenant, formData);
+      const payload: Record<string, unknown> = { name: formData.name, description: formData.description || undefined };
+      if (formData.starts_at) payload.starts_at = new Date(formData.starts_at).toISOString();
+      if (formData.ends_at) payload.ends_at = new Date(formData.ends_at).toISOString();
+      await projectsApi.create(selectedTenant, payload);
       setShowForm(false);
       setFormData({ name: '', description: '', starts_at: '', ends_at: '' });
       const updated = await projectsApi.list(selectedTenant);
