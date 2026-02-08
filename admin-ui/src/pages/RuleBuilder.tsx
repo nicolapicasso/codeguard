@@ -27,6 +27,14 @@ const SEGMENT_TYPES = ['fixed', 'numeric', 'alpha', 'alphanumeric', 'check', 'da
 const CHARSETS = ['NUMERIC', 'ALPHA_UPPER', 'ALPHA_LOWER', 'ALPHANUMERIC', 'CUSTOM'];
 const ALGORITHMS = ['LUHN', 'MOD10', 'MOD11', 'MOD97', 'VERHOEFF', 'DAMM', 'CUSTOM'];
 
+const ALLOWED_SEGMENTS: Record<string, string[]> = {
+  NUMERIC:      ['numeric', 'fixed', 'check', 'date'],
+  ALPHA_UPPER:  ['alpha', 'fixed', 'enum', 'check'],
+  ALPHA_LOWER:  ['alpha', 'fixed', 'enum', 'check'],
+  ALPHANUMERIC: SEGMENT_TYPES,
+  CUSTOM:       SEGMENT_TYPES,
+};
+
 const CUSTOM_FUNCTION_TEMPLATE = `// input: string con los dígitos del payload
 // Debe retornar el dígito de control calculado como string
 const sum = input.split('').reduce((a, c) => a + parseInt(c), 0);
@@ -47,7 +55,7 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
     points_value: 0,
   });
   const [segments, setSegments] = useState<Segment[]>([
-    { name: 'unique_code', type: 'alphanumeric', length: 8 },
+    { name: 'codigo', type: 'alphanumeric', length: 8 },
   ]);
   const [productInfo, setProductInfo] = useState('{}');
   const [campaignInfo, setCampaignInfo] = useState('{}');
@@ -55,10 +63,27 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
   const [allowedCountries, setAllowedCountries] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const allowedTypes = ALLOWED_SEGMENTS[form.charset] || SEGMENT_TYPES;
+  const defaultSegType = allowedTypes.includes('alphanumeric') ? 'alphanumeric' : allowedTypes[0];
+
   const totalLength = segments.reduce((sum, s) => sum + s.length, 0);
 
+  const handleCharsetChange = (newCharset: string) => {
+    const newAllowed = ALLOWED_SEGMENTS[newCharset] || SEGMENT_TYPES;
+    // Reset segments that are incompatible with the new charset
+    const updated = segments.map((seg) => {
+      if (!newAllowed.includes(seg.type)) {
+        const fallback = newAllowed.includes('alphanumeric') ? 'alphanumeric' : newAllowed[0];
+        return { ...seg, type: fallback };
+      }
+      return seg;
+    });
+    setSegments(updated);
+    setForm({ ...form, charset: newCharset });
+  };
+
   const addSegment = () => {
-    setSegments([...segments, { name: `segment_${segments.length}`, type: 'alphanumeric', length: 4 }]);
+    setSegments([...segments, { name: `segment_${segments.length}`, type: defaultSegType, length: 4 }]);
   };
 
   const removeSegment = (index: number) => {
@@ -153,7 +178,7 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Charset *</label>
-              <select value={form.charset} onChange={(e) => setForm({ ...form, charset: e.target.value })}
+              <select value={form.charset} onChange={(e) => handleCharsetChange(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
                 {CHARSETS.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
@@ -266,7 +291,7 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
                     className="w-32 px-2 py-1.5 border border-gray-300 rounded text-sm" placeholder="nombre" />
                   <select value={seg.type} onChange={(e) => updateSegment(i, 'type', e.target.value)}
                     className="w-32 px-2 py-1.5 border border-gray-300 rounded text-sm">
-                    {SEGMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                    {allowedTypes.map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
                   <input type="number" min={1} value={seg.length} onChange={(e) => updateSegment(i, 'length', parseInt(e.target.value) || 1)}
                     className="w-20 px-2 py-1.5 border border-gray-300 rounded text-sm" placeholder="len" />
