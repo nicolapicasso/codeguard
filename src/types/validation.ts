@@ -10,6 +10,7 @@ export type ValidationErrorCode =
   | 'PROJECT_INACTIVE'
   | 'PROJECT_EXPIRED'
   | 'RULE_INACTIVE'
+  | 'GEO_BLOCKED'
   | 'RATE_LIMITED'
   | 'AUTH_FAILED';
 
@@ -23,6 +24,7 @@ export interface ValidationSuccess {
   campaignInfo: unknown;
   redeemedAt: string;
   redemptionId: string;
+  sandbox?: boolean;
 }
 
 export interface ValidationFailure {

@@ -60,6 +60,7 @@ model CodeRule {
   campaignInfo       Json?           @map("campaign_info")
   pointsValue        Int?            @map("points_value")
   customCheckFunction String?        @map("custom_check_function")
+  allowedCountries   String[]        @default([]) @map("allowed_countries")
   isActive           Boolean         @default(true) @map("is_active")
   createdAt          DateTime        @default(now()) @map("created_at")
   updatedAt          DateTime        @updatedAt @map("updated_at")

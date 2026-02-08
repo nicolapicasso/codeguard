@@ -21,8 +21,12 @@ export async function validationRoutes(app: FastifyInstance): Promise<void> {
       project_id: string;
       ow_user_id?: string;
       ow_transaction_id?: string;
+      country?: string;
       metadata?: Record<string, unknown>;
     };
+
+    const sandboxHeader = request.headers['x-sandbox'];
+    const isSandbox = sandboxHeader === 'true' || sandboxHeader === '1';
 
     const result = await runPipeline({
       code: body.code,
@@ -30,7 +34,9 @@ export async function validationRoutes(app: FastifyInstance): Promise<void> {
       owUserId: body.ow_user_id,
       owTransactionId: body.ow_transaction_id,
       ipAddress: request.ip,
+      country: body.country,
       metadata: body.metadata,
+      sandbox: isSandbox,
     });
 
     if (result.status === 'KO') {
@@ -43,6 +49,7 @@ export async function validationRoutes(app: FastifyInstance): Promise<void> {
         PROJECT_INACTIVE: 403,
         PROJECT_EXPIRED: 403,
         RULE_INACTIVE: 403,
+        GEO_BLOCKED: 403,
       };
       const httpStatus = statusMap[result.errorCode] || 400;
       return reply.status(httpStatus).send({
@@ -53,7 +60,7 @@ export async function validationRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    return reply.status(200).send({
+    const response: Record<string, unknown> = {
       status: 'OK',
       code: result.code,
       code_normalized: result.codeNormalized,
@@ -63,7 +70,12 @@ export async function validationRoutes(app: FastifyInstance): Promise<void> {
       campaign_info: result.campaignInfo,
       redeemed_at: result.redeemedAt,
       redemption_id: result.redemptionId,
-    });
+    };
+    if (result.sandbox) {
+      response.sandbox = true;
+    }
+
+    return reply.status(200).send(response);
   });
 
   // GET /api/v1/validate/check — Pre-validate without redeeming
@@ -87,6 +99,7 @@ export async function validationRoutes(app: FastifyInstance): Promise<void> {
         PROJECT_INACTIVE: 403,
         PROJECT_EXPIRED: 403,
         RULE_INACTIVE: 403,
+        GEO_BLOCKED: 403,
       };
       const httpStatus = statusMap[result.errorCode] || 400;
       return reply.status(httpStatus).send({

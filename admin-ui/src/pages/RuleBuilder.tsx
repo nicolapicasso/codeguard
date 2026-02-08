@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader } from '../components/Card';
-import { Plus, Trash2, GripVertical } from 'lucide-react';
+import { Plus, Trash2, GripVertical, Code } from 'lucide-react';
 import { codeRules as rulesApi } from '../lib/api';
 
 interface Segment {
@@ -25,7 +25,12 @@ interface RuleBuilderProps {
 
 const SEGMENT_TYPES = ['fixed', 'numeric', 'alpha', 'alphanumeric', 'check', 'date', 'enum'];
 const CHARSETS = ['NUMERIC', 'ALPHA_UPPER', 'ALPHA_LOWER', 'ALPHANUMERIC', 'CUSTOM'];
-const ALGORITHMS = ['LUHN', 'MOD10', 'MOD11', 'MOD97', 'VERHOEFF', 'DAMM'];
+const ALGORITHMS = ['LUHN', 'MOD10', 'MOD11', 'MOD97', 'VERHOEFF', 'DAMM', 'CUSTOM'];
+
+const CUSTOM_FUNCTION_TEMPLATE = `// input: string con los dígitos del payload
+// Debe retornar el dígito de control calculado como string
+const sum = input.split('').reduce((a, c) => a + parseInt(c), 0);
+return String(sum % 10);`;
 
 export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps) {
   const [form, setForm] = useState({
@@ -46,6 +51,8 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
   ]);
   const [productInfo, setProductInfo] = useState('{}');
   const [campaignInfo, setCampaignInfo] = useState('{}');
+  const [customFunction, setCustomFunction] = useState(CUSTOM_FUNCTION_TEMPLATE);
+  const [allowedCountries, setAllowedCountries] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const totalLength = segments.reduce((sum, s) => sum + s.length, 0);
@@ -92,6 +99,11 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
         }),
       };
 
+      const countries = allowedCountries
+        .split(',')
+        .map((c) => c.trim().toUpperCase())
+        .filter((c) => c.length === 2);
+
       await rulesApi.create(projectId, {
         name: form.name,
         sku_reference: form.sku_reference || undefined,
@@ -108,6 +120,8 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
         points_value: form.points_value || undefined,
         product_info: parsedProduct,
         campaign_info: parsedCampaign,
+        custom_check_function: form.check_algorithm === 'CUSTOM' ? customFunction : undefined,
+        allowed_countries: countries.length > 0 ? countries : undefined,
       });
 
       onCreated();
@@ -170,7 +184,7 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
           </div>
 
           {/* Check digit config */}
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-6 flex-wrap">
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={form.has_check_digit} onChange={(e) => setForm({ ...form, has_check_digit: e.target.checked })}
                 className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" />
@@ -194,6 +208,42 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
                 className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" />
               Case sensitive
             </label>
+          </div>
+
+          {/* Custom function editor */}
+          {form.has_check_digit && form.check_algorithm === 'CUSTOM' && (
+            <div className="border border-amber-200 bg-amber-50 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Code className="w-4 h-4 text-amber-600" />
+                <h3 className="text-sm font-medium text-amber-800">Custom Check Function (JavaScript)</h3>
+              </div>
+              <p className="text-xs text-amber-600 mb-3">
+                La funcion recibe <code className="bg-amber-100 px-1 rounded">input</code> (string con los digitos del payload)
+                y debe retornar el digito de control como string. Se ejecuta en sandbox con timeout de 100ms.
+              </p>
+              <textarea
+                value={customFunction}
+                onChange={(e) => setCustomFunction(e.target.value)}
+                rows={6}
+                className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm font-mono bg-white focus:ring-2 focus:ring-amber-500 outline-none"
+                placeholder="// Tu funcion aqui..."
+                spellCheck={false}
+              />
+            </div>
+          )}
+
+          {/* Geo-fencing */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Geo-fencing (paises permitidos, ISO alpha-2)
+            </label>
+            <input
+              value={allowedCountries}
+              onChange={(e) => setAllowedCountries(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+              placeholder="ES, MX, AR, CO (vacio = sin restriccion)"
+            />
+            <p className="text-xs text-gray-400 mt-1">Dejar vacio para permitir todos los paises</p>
           </div>
 
           {/* Segments builder */}

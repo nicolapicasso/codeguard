@@ -6,6 +6,7 @@ export const validateRequestSchema = {
     project_id: { type: 'string', format: 'uuid' },
     ow_user_id: { type: 'string' },
     ow_transaction_id: { type: 'string' },
+    country: { type: 'string', minLength: 2, maxLength: 2 },
     metadata: { type: 'object' },
   },
 } as const;

@@ -19,6 +19,7 @@ export const createCodeRuleSchema = {
     campaign_info: { type: 'object' },
     points_value: { type: 'integer' },
     custom_check_function: { type: 'string' },
+    allowed_countries: { type: 'array', items: { type: 'string', minLength: 2, maxLength: 2 } },
   },
 } as const;
 
@@ -32,6 +33,7 @@ export const updateCodeRuleSchema = {
     product_info: { type: 'object' },
     campaign_info: { type: 'object' },
     points_value: { type: 'integer' },
+    allowed_countries: { type: 'array', items: { type: 'string', minLength: 2, maxLength: 2 } },
   },
 } as const;
 

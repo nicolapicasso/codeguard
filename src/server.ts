@@ -17,6 +17,7 @@ import { projectRoutes } from './modules/projects/routes.js';
 import { codeRuleRoutes } from './modules/code-rules/routes.js';
 import { auditRoutes } from './modules/audit/routes.js';
 import { generateToken } from './modules/auth/jwt.js';
+import { registerMetricsHooks, registerMetricsRoute } from './utils/metrics.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -62,6 +63,10 @@ export async function buildApp() {
   // Middleware
   app.addHook('onRequest', requestLogger);
   app.setErrorHandler(errorHandler);
+
+  // Prometheus metrics
+  registerMetricsHooks(app);
+  registerMetricsRoute(app);
 
   // Health checks
   app.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));

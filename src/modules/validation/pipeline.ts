@@ -7,7 +7,10 @@ import { validateSegments } from './segments.js';
 import { validateCheckDigit } from './check-digit/index.js';
 import { validateVigency } from './vigency.js';
 import { validateUniqueness } from './uniqueness.js';
+import { validateGeoFencing } from './geo-fencing.js';
 import { getCachedProjectWithRules } from '../../utils/cache.js';
+import { metrics } from '../../utils/metrics.js';
+import { randomUUID } from 'crypto';
 
 export interface ValidateInput {
   code: string;
@@ -16,14 +19,32 @@ export interface ValidateInput {
   owTransactionId?: string;
   ipAddress?: string;
   metadata?: Record<string, unknown>;
+  country?: string;
   dryRun?: boolean;
+  sandbox?: boolean;
 }
 
 /**
  * Main validation pipeline — orchestrates all 6 phases.
  * If dryRun is true, skips Phase 6 (uniqueness/redemption).
+ * If sandbox is true, runs phases 1-5 and simulates phase 6 without persisting.
  */
 export async function runPipeline(input: ValidateInput): Promise<ValidationResult> {
+  const startTime = Date.now();
+  const result = await executePipeline(input);
+
+  const duration = Date.now() - startTime;
+  const status = result.status;
+  const errorCode = status === 'KO' ? result.errorCode : 'none';
+  const mode = input.sandbox ? 'sandbox' : input.dryRun ? 'dry_run' : 'live';
+
+  metrics.incrementCounter('codeguard_validations_total', { status, error_code: errorCode, mode });
+  metrics.observeHistogram('codeguard_validation_duration_ms', duration, { status, mode });
+
+  return result;
+}
+
+async function executePipeline(input: ValidateInput): Promise<ValidationResult> {
   // Load project with its code rules (cached in Redis, TTL 5 min)
   const project = await getCachedProjectWithRules(input.projectId);
 
@@ -97,6 +118,26 @@ async function tryRule(
   // Phase 5: Vigency
   const vigencyError = validateVigency(project, codeRule);
   if (vigencyError) return vigencyError;
+
+  // Phase 5b: Geo-fencing
+  const geoError = validateGeoFencing(codeRule, input.country);
+  if (geoError) return geoError;
+
+  // Sandbox mode — simulate phase 6 without persisting
+  if (input.sandbox) {
+    return {
+      status: 'OK',
+      code: input.code,
+      codeNormalized: normalizedCode,
+      project: { id: project.id, name: project.name },
+      codeRule: { id: codeRule.id, name: codeRule.name },
+      productInfo: codeRule.productInfo,
+      campaignInfo: codeRule.campaignInfo,
+      redeemedAt: new Date().toISOString(),
+      redemptionId: `sandbox-${randomUUID().slice(0, 8)}`,
+      sandbox: true,
+    };
+  }
 
   // Phase 6: Uniqueness (skip if dry run)
   if (!input.dryRun) {

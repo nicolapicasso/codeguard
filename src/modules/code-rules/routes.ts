@@ -30,6 +30,7 @@ export async function codeRuleRoutes(app: FastifyInstance): Promise<void> {
       campaign_info?: Record<string, unknown>;
       points_value?: number;
       custom_check_function?: string;
+      allowed_countries?: string[];
     };
 
     const rule = await createCodeRule(project_id, {
@@ -50,6 +51,7 @@ export async function codeRuleRoutes(app: FastifyInstance): Promise<void> {
       campaignInfo: body.campaign_info,
       pointsValue: body.points_value,
       customCheckFunction: body.custom_check_function,
+      allowedCountries: body.allowed_countries,
     });
 
     return reply.status(201).send(rule);
@@ -82,6 +84,7 @@ export async function codeRuleRoutes(app: FastifyInstance): Promise<void> {
       product_info?: Record<string, unknown>;
       campaign_info?: Record<string, unknown>;
       points_value?: number;
+      allowed_countries?: string[];
     };
     const rule = await updateCodeRule(id, {
       name: body.name,
@@ -91,6 +94,7 @@ export async function codeRuleRoutes(app: FastifyInstance): Promise<void> {
       productInfo: body.product_info,
       campaignInfo: body.campaign_info,
       pointsValue: body.points_value,
+      allowedCountries: body.allowed_countries,
     });
     return reply.status(200).send(rule);
   });

@@ -20,6 +20,7 @@ export interface CreateCodeRuleInput {
   campaignInfo?: Record<string, unknown>;
   pointsValue?: number;
   customCheckFunction?: string;
+  allowedCountries?: string[];
 }
 
 export async function createCodeRule(projectId: string, data: CreateCodeRuleInput) {
@@ -44,6 +45,7 @@ export async function createCodeRule(projectId: string, data: CreateCodeRuleInpu
       campaignInfo: data.campaignInfo as Prisma.InputJsonValue | undefined,
       pointsValue: data.pointsValue,
       customCheckFunction: data.customCheckFunction,
+      allowedCountries: data.allowedCountries ?? [],
     },
   });
 }
@@ -74,6 +76,7 @@ export async function updateCodeRule(id: string, data: {
   productInfo?: Record<string, unknown>;
   campaignInfo?: Record<string, unknown>;
   pointsValue?: number;
+  allowedCountries?: string[];
 }) {
   const rule = await prisma.codeRule.update({
     where: { id },
@@ -85,6 +88,7 @@ export async function updateCodeRule(id: string, data: {
       productInfo: data.productInfo as Prisma.InputJsonValue | undefined,
       campaignInfo: data.campaignInfo as Prisma.InputJsonValue | undefined,
       pointsValue: data.pointsValue,
+      allowedCountries: data.allowedCountries,
     },
   });
   await invalidateProjectCache(rule.projectId);
