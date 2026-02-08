@@ -46,5 +46,12 @@ services:
       redis:
         condition: service_healthy
 
+  admin-ui:
+    build: ./admin-ui
+    ports:
+      - "8080:80"
+    depends_on:
+      - app
+
 volumes:
   postgres_data:

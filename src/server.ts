@@ -16,6 +16,7 @@ import { tenantRoutes } from './modules/tenants/routes.js';
 import { projectRoutes } from './modules/projects/routes.js';
 import { codeRuleRoutes } from './modules/code-rules/routes.js';
 import { auditRoutes } from './modules/audit/routes.js';
+import { generateToken } from './modules/auth/jwt.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -80,6 +81,24 @@ export async function buildApp() {
   });
 
   app.get('/health/live', async () => ({ status: 'live' }));
+
+  // Admin auth — JWT token generation (for development/admin panel login)
+  app.post('/api/admin/auth/token', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['secret'],
+        properties: { secret: { type: 'string' } },
+      },
+    },
+  }, async (request, reply) => {
+    const { secret } = request.body as { secret: string };
+    if (secret !== config.jwtSecret) {
+      return reply.status(401).send({ status: 'KO', error_code: 'AUTH_FAILED', error_message: 'Invalid admin secret' });
+    }
+    const token = generateToken('admin');
+    return reply.status(200).send({ token, expires_in: '8h' });
+  });
 
   // Routes
   await app.register(validationRoutes);

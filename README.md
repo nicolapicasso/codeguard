@@ -136,13 +136,48 @@ El motor ejecuta 6 fases secuenciales:
 5. **Vigencia** — Estado activo + rango temporal del proyecto
 6. **Unicidad** — SHA-256 + Redlock + INSERT atómico (garantiza single-use)
 
+## Admin Panel
+
+Panel de administración web para gestionar tenants, proyectos, reglas y probar códigos.
+
+### Desarrollo local
+
+```bash
+cd admin-ui
+npm install
+npm run dev
+```
+
+Abre `http://localhost:5173`. El proxy de Vite redirige las peticiones API a `localhost:3000`.
+
+### Autenticación
+
+El panel requiere un JWT token. Usa el endpoint:
+
+```bash
+curl -X POST http://localhost:3000/api/admin/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{"secret":"<JWT_SECRET>"}'
+```
+
+O introduce el JWT_SECRET directamente en la pantalla de login del panel.
+
+### Funcionalidades
+
+- **Dashboard** — Estado de salud, conteo de tenants
+- **Tenants** — CRUD completo, rotar API Keys
+- **Projects** — Crear/editar proyectos por tenant
+- **Code Rules** — Gestión de reglas + Rule Builder visual
+- **Code Tester** — Probar códigos con resultado debug
+- **Stats** — Gráficas de canjes por día, por regla
+
 ## Docker (producción)
 
 ```bash
 docker compose up -d
 ```
 
-Levanta PostgreSQL 16, Redis 7 y la aplicación.
+Levanta PostgreSQL 16, Redis 7, la API (puerto 3000) y el Admin Panel (puerto 8080).
 
 ## Estructura del proyecto
 
@@ -169,6 +204,14 @@ codeguard/
 │   └── utils/                        # Crypto, Redis, Prisma, Cache
 ├── prisma/                           # Schema + migraciones + seed
 ├── tests/                            # Unit + integration + load
+├── admin-ui/                        # React admin panel (Vite + Tailwind)
+│   ├── src/
+│   │   ├── pages/                   # Dashboard, Tenants, Projects, etc.
+│   │   ├── components/              # Layout, Login, Card, Badge
+│   │   ├── lib/                     # API client, utils
+│   │   └── hooks/                   # useApi hook
+│   ├── Dockerfile                   # Multi-stage (Node build + Nginx)
+│   └── nginx.conf                   # SPA + API proxy
 ├── docker-compose.yml
 └── Dockerfile
 ```
