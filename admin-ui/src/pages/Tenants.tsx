@@ -64,7 +64,7 @@ export function Tenants() {
         </div>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium"
+          className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 transition-colors text-sm font-medium"
         >
           <Plus className="w-4 h-4" />
           Nuevo Tenant
@@ -83,7 +83,7 @@ export function Tenants() {
                   required
                   value={formData.ow_tenant_id}
                   onChange={(e) => setFormData({ ...formData, ow_tenant_id: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
                   placeholder="ow-tenant-001"
                 />
               </div>
@@ -93,7 +93,7 @@ export function Tenants() {
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
                   placeholder="Mi Empresa"
                 />
               </div>
@@ -102,12 +102,12 @@ export function Tenants() {
                 <input
                   value={formData.webhook_url}
                   onChange={(e) => setFormData({ ...formData, webhook_url: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
                   placeholder="https://..."
                 />
               </div>
               <div className="md:col-span-3 flex gap-2">
-                <button type="submit" disabled={submitting} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-emerald-700 disabled:opacity-50">
+                <button type="submit" disabled={submitting} className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-brand-700 disabled:opacity-50">
                   {submitting ? 'Creando...' : 'Crear'}
                 </button>
                 <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">
@@ -138,7 +138,7 @@ export function Tenants() {
                   </div>
                   <div>
                     <span className="font-medium text-gray-500">API Secret:</span>
-                    <button onClick={() => setShowSecret(!showSecret)} className="ml-2 text-emerald-600">
+                    <button onClick={() => setShowSecret(!showSecret)} className="ml-2 text-brand-600">
                       {showSecret ? <EyeOff className="w-4 h-4 inline" /> : <Eye className="w-4 h-4 inline" />}
                     </button>
                     {showSecret && (
@@ -192,7 +192,7 @@ export function Tenants() {
                       <td className="py-3 px-2 text-gray-500">{new Date(t.createdAt).toLocaleDateString('es-ES')}</td>
                       <td className="py-3 px-2">
                         <div className="flex gap-2">
-                          <button onClick={() => loadDetail(t.id)} className="text-emerald-600 hover:text-emerald-800 text-xs font-medium">Ver</button>
+                          <button onClick={() => loadDetail(t.id)} className="text-brand-600 hover:text-brand-800 text-xs font-medium">Ver</button>
                           <button onClick={() => handleToggleActive(t.id, t.isActive)} className="text-amber-600 hover:text-amber-800 text-xs font-medium">
                             {t.isActive ? 'Desactivar' : 'Activar'}
                           </button>

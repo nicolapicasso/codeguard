@@ -1,4 +1,4 @@
-# CodeGuard — Motor de Validación de Códigos Únicos
+# OmniCodex — Motor de Validación de Códigos Únicos
 
 Middleware para OmniWallet que valida códigos únicos desechables impresos por fabricantes de productos de gran consumo.
 

@@ -4,7 +4,7 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   logLevel: process.env.LOG_LEVEL || 'info',
 
-  databaseUrl: process.env.DATABASE_URL || 'postgresql://codeguard:secret@localhost:5432/codeguard',
+  databaseUrl: process.env.DATABASE_URL || 'postgresql://omnicodex:secret@localhost:5432/omnicodex',
 
   redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
 

@@ -24,7 +24,7 @@ export async function validateUniqueness(
   metadata?: Record<string, unknown>,
 ): Promise<UniquenessResult> {
   const codeHash = sha256(normalizedCode);
-  const lockKey = `codeguard:lock:${codeRule.id}:${codeHash}`;
+  const lockKey = `omnicodex:lock:${codeRule.id}:${codeHash}`;
   const redlock = getRedlock();
 
   let lock;

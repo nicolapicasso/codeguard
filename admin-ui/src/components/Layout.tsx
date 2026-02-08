@@ -26,8 +26,8 @@ export function Layout() {
     <div className="flex h-screen">
       <aside className="w-64 bg-gray-900 text-white flex flex-col">
         <div className="p-4 border-b border-gray-700 flex items-center gap-2">
-          <Shield className="w-6 h-6 text-emerald-400" />
-          <h1 className="text-lg font-bold">CodeGuard</h1>
+          <Shield className="w-6 h-6 text-brand-400" />
+          <h1 className="text-lg font-bold">OmniCodex</h1>
           <span className="text-xs text-gray-400 ml-auto">Admin</span>
         </div>
 
@@ -41,7 +41,7 @@ export function Layout() {
                 cn(
                   'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
                   isActive
-                    ? 'bg-emerald-600 text-white'
+                    ? 'bg-brand-600 text-white'
                     : 'text-gray-300 hover:bg-gray-800 hover:text-white',
                 )
               }

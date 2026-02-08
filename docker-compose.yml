@@ -2,15 +2,15 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: codeguard
+      POSTGRES_USER: omnicodex
       POSTGRES_PASSWORD: secret
-      POSTGRES_DB: codeguard
+      POSTGRES_DB: omnicodex
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U codeguard"]
+      test: ["CMD-SHELL", "pg_isready -U omnicodex"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -33,7 +33,7 @@ services:
       NODE_ENV: production
       PORT: 3000
       HOST: 0.0.0.0
-      DATABASE_URL: postgresql://codeguard:secret@postgres:5432/codeguard
+      DATABASE_URL: postgresql://omnicodex:secret@postgres:5432/omnicodex
       REDIS_URL: redis://redis:6379
       JWT_SECRET: change-me-in-production
       HMAC_TOLERANCE_SECONDS: 300

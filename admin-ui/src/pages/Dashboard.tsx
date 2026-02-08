@@ -34,14 +34,14 @@ export function Dashboard() {
 
   const stats: StatCard[] = [
     { label: 'Tenants', value: tenantList.length, icon: Users, color: 'text-blue-600' },
-    { label: 'Tenants activos', value: tenantList.filter((t) => t.isActive).length, icon: CheckCircle, color: 'text-emerald-600' },
+    { label: 'Tenants activos', value: tenantList.filter((t) => t.isActive).length, icon: CheckCircle, color: 'text-brand-600' },
   ];
 
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-500 mt-1">Resumen general del sistema CodeGuard</p>
+        <p className="text-gray-500 mt-1">Resumen general del sistema OmniCodex</p>
       </div>
 
       {/* Health status */}

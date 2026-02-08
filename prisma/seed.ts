@@ -4,7 +4,7 @@ import { createHash, randomBytes, createHmac } from 'node:crypto';
 const prisma = new PrismaClient();
 
 function generateApiKey(): string {
-  return `cg_${randomBytes(24).toString('hex')}`;
+  return `oc_${randomBytes(24).toString('hex')}`;
 }
 
 function generateApiSecret(): string {
@@ -12,7 +12,7 @@ function generateApiSecret(): string {
 }
 
 async function main() {
-  console.log('Seeding CodeGuard database...');
+  console.log('Seeding OmniCodex database...');
 
   // Create demo tenant
   const apiKey = generateApiKey();
@@ -26,7 +26,7 @@ async function main() {
       name: 'Demo Tenant - OmniWallet Test',
       apiKey,
       apiSecret,
-      webhookUrl: 'https://webhook.example.com/codeguard',
+      webhookUrl: 'https://webhook.example.com/omnicodex',
     },
   });
 

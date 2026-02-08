@@ -107,13 +107,13 @@ export function registerMetricsHooks(app: FastifyInstance): void {
     const statusCode = String(reply.statusCode);
     const duration = reply.elapsedTime;
 
-    metrics.incrementCounter('codeguard_http_requests_total', {
+    metrics.incrementCounter('omnicodex_http_requests_total', {
       method,
       route,
       status: statusCode,
     });
 
-    metrics.observeHistogram('codeguard_http_request_duration_ms', duration, {
+    metrics.observeHistogram('omnicodex_http_request_duration_ms', duration, {
       method,
       route,
     });
@@ -127,10 +127,10 @@ export function registerMetricsRoute(app: FastifyInstance): void {
     const uptime = process.uptime();
     const mem = process.memoryUsage();
 
-    metrics.setGauge('codeguard_process_uptime_seconds', uptime);
-    metrics.setGauge('codeguard_process_memory_rss_bytes', mem.rss);
-    metrics.setGauge('codeguard_process_memory_heap_used_bytes', mem.heapUsed);
-    metrics.setGauge('codeguard_process_memory_heap_total_bytes', mem.heapTotal);
+    metrics.setGauge('omnicodex_process_uptime_seconds', uptime);
+    metrics.setGauge('omnicodex_process_memory_rss_bytes', mem.rss);
+    metrics.setGauge('omnicodex_process_memory_heap_used_bytes', mem.heapUsed);
+    metrics.setGauge('omnicodex_process_memory_heap_total_bytes', mem.heapTotal);
 
     reply.header('Content-Type', 'text/plain; version=0.0.4');
     return metrics.toPrometheus();

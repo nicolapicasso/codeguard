@@ -169,17 +169,17 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
               <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">SKU Referencia</label>
               <input value={form.sku_reference} onChange={(e) => setForm({ ...form, sku_reference: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Charset *</label>
               <select value={form.charset} onChange={(e) => handleCharsetChange(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none">
                 {CHARSETS.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
@@ -189,22 +189,22 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Separador</label>
               <input value={form.separator} onChange={(e) => setForm({ ...form, separator: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="-" />
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none" placeholder="-" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Prefijo</label>
               <input value={form.prefix} onChange={(e) => setForm({ ...form, prefix: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Max canjes</label>
               <input type="number" min={1} value={form.max_redemptions} onChange={(e) => setForm({ ...form, max_redemptions: parseInt(e.target.value) || 1 })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Puntos</label>
               <input type="number" value={form.points_value} onChange={(e) => setForm({ ...form, points_value: parseInt(e.target.value) || 0 })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none" />
             </div>
           </div>
 
@@ -212,17 +212,17 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
           <div className="flex items-center gap-6 flex-wrap">
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={form.has_check_digit} onChange={(e) => setForm({ ...form, has_check_digit: e.target.checked })}
-                className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" />
+                className="rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
               Digito de control
             </label>
             {form.has_check_digit && (
               <>
                 <select value={form.check_algorithm} onChange={(e) => setForm({ ...form, check_algorithm: e.target.value })}
-                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none">
                   {ALGORITHMS.map((a) => <option key={a} value={a}>{a}</option>)}
                 </select>
                 <select value={form.check_digit_position} onChange={(e) => setForm({ ...form, check_digit_position: e.target.value })}
-                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none">
                   <option value="LAST">Al final</option>
                   <option value="FIRST">Al inicio</option>
                 </select>
@@ -230,7 +230,7 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
             )}
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={form.case_sensitive} onChange={(e) => setForm({ ...form, case_sensitive: e.target.checked })}
-                className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" />
+                className="rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
               Case sensitive
             </label>
           </div>
@@ -265,7 +265,7 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
             <input
               value={allowedCountries}
               onChange={(e) => setAllowedCountries(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
               placeholder="ES, MX, AR, CO (vacio = sin restriccion)"
             />
             <p className="text-xs text-gray-400 mt-1">Dejar vacio para permitir todos los paises</p>
@@ -278,7 +278,7 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
                 Segmentos <span className="text-gray-400">(longitud total: {totalLength})</span>
               </h3>
               <button type="button" onClick={addSegment}
-                className="flex items-center gap-1 text-sm text-emerald-600 hover:text-emerald-800 font-medium">
+                className="flex items-center gap-1 text-sm text-brand-600 hover:text-brand-800 font-medium">
                 <Plus className="w-4 h-4" /> Agregar segmento
               </button>
             </div>
@@ -334,12 +334,12 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Product Info (JSON)</label>
               <textarea value={productInfo} onChange={(e) => setProductInfo(e.target.value)} rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-emerald-500 outline-none" />
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-brand-500 outline-none" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Campaign Info (JSON)</label>
               <textarea value={campaignInfo} onChange={(e) => setCampaignInfo(e.target.value)} rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-emerald-500 outline-none" />
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-brand-500 outline-none" />
             </div>
           </div>
 
@@ -359,7 +359,7 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
 
           <div className="flex gap-2">
             <button type="submit" disabled={submitting}
-              className="bg-emerald-600 text-white px-6 py-2 rounded-lg text-sm hover:bg-emerald-700 disabled:opacity-50 font-medium">
+              className="bg-brand-600 text-white px-6 py-2 rounded-lg text-sm hover:bg-brand-700 disabled:opacity-50 font-medium">
               {submitting ? 'Creando...' : 'Crear Regla'}
             </button>
             <button type="button" onClick={onCancel}

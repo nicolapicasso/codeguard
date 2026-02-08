@@ -4,7 +4,7 @@ import { prisma } from './prisma.js';
 import { logger } from './logger.js';
 
 const CACHE_TTL = 300; // 5 minutes
-const PROJECT_KEY_PREFIX = 'codeguard:project:';
+const PROJECT_KEY_PREFIX = 'omnicodex:project:';
 
 type ProjectWithRules = Project & { codeRules: CodeRule[] };
 

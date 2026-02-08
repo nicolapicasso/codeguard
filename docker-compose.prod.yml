@@ -3,13 +3,13 @@ services:
     image: postgres:16-alpine
     restart: always
     environment:
-      POSTGRES_USER: codeguard
+      POSTGRES_USER: omnicodex
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: codeguard
+      POSTGRES_DB: omnicodex
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U codeguard"]
+      test: ["CMD-SHELL", "pg_isready -U omnicodex"]
       interval: 10s
       timeout: 5s
       retries: 5

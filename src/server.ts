@@ -33,7 +33,7 @@ export async function buildApp() {
   await app.register(swagger, {
     openapi: {
       info: {
-        title: 'CodeGuard API',
+        title: 'OmniCodex API',
         description: 'Motor de Validación de Códigos Únicos — Middleware para OmniWallet',
         version: '1.0.0',
       },
@@ -133,7 +133,7 @@ async function start() {
 
   try {
     await app.listen({ port: config.port, host: config.host });
-    logger.info(`CodeGuard server running on ${config.host}:${config.port}`);
+    logger.info(`OmniCodex server running on ${config.host}:${config.port}`);
   } catch (err) {
     logger.error(err, 'Failed to start server');
     process.exit(1);
