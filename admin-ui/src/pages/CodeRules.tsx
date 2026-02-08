@@ -138,7 +138,7 @@ export function CodeRules() {
         {selectedProject && (
           <button
             onClick={() => setShowBuilder(!showBuilder)}
-            className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium"
+            className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 transition-colors text-sm font-medium"
           >
             <Plus className="w-4 h-4" />
             Nueva Regla
@@ -155,7 +155,7 @@ export function CodeRules() {
               <select
                 value={selectedTenant}
                 onChange={(e) => setSelectedTenant(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
               >
                 <option value="">-- Seleccionar Tenant --</option>
                 {tenantList.map((t) => (
@@ -168,7 +168,7 @@ export function CodeRules() {
               <select
                 value={selectedProject}
                 onChange={(e) => setSelectedProject(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
                 disabled={!selectedTenant}
               >
                 <option value="">-- Seleccionar Proyecto --</option>
@@ -194,7 +194,7 @@ export function CodeRules() {
               <h2 className="font-semibold">{editing ? 'Editar Regla' : selectedRule.name}</h2>
               <div className="flex items-center gap-2">
                 {!editing && (
-                  <button onClick={() => startEditing(selectedRule)} className="flex items-center gap-1 text-emerald-600 hover:text-emerald-800 text-sm font-medium">
+                  <button onClick={() => startEditing(selectedRule)} className="flex items-center gap-1 text-brand-600 hover:text-brand-800 text-sm font-medium">
                     <Pencil className="w-3.5 h-3.5" /> Editar
                   </button>
                 )}
@@ -213,7 +213,7 @@ export function CodeRules() {
                     <input
                       value={editForm.name}
                       onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
                     />
                   </div>
                   <div>
@@ -221,7 +221,7 @@ export function CodeRules() {
                     <input
                       value={editForm.sku_reference}
                       onChange={(e) => setEditForm({ ...editForm, sku_reference: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
                     />
                   </div>
                 </div>
@@ -234,7 +234,7 @@ export function CodeRules() {
                       min={1}
                       value={editForm.max_redemptions}
                       onChange={(e) => setEditForm({ ...editForm, max_redemptions: parseInt(e.target.value) || 1 })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
                     />
                   </div>
                   <div>
@@ -243,7 +243,7 @@ export function CodeRules() {
                       type="number"
                       value={editForm.points_value}
                       onChange={(e) => setEditForm({ ...editForm, points_value: parseInt(e.target.value) || 0 })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
                     />
                   </div>
                   <div className="flex items-end">
@@ -252,7 +252,7 @@ export function CodeRules() {
                         type="checkbox"
                         checked={editForm.is_active}
                         onChange={(e) => setEditForm({ ...editForm, is_active: e.target.checked })}
-                        className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                        className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
                       />
                       Activa
                     </label>
@@ -266,7 +266,7 @@ export function CodeRules() {
                   <input
                     value={editForm.allowed_countries}
                     onChange={(e) => setEditForm({ ...editForm, allowed_countries: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
                     placeholder="ES, MX, AR (vacio = sin restriccion)"
                   />
                 </div>
@@ -278,7 +278,7 @@ export function CodeRules() {
                       value={editForm.product_info}
                       onChange={(e) => setEditForm({ ...editForm, product_info: e.target.value })}
                       rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-emerald-500 outline-none"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-brand-500 outline-none"
                     />
                   </div>
                   <div>
@@ -287,7 +287,7 @@ export function CodeRules() {
                       value={editForm.campaign_info}
                       onChange={(e) => setEditForm({ ...editForm, campaign_info: e.target.value })}
                       rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-emerald-500 outline-none"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-brand-500 outline-none"
                     />
                   </div>
                 </div>
@@ -307,7 +307,7 @@ export function CodeRules() {
                   <button
                     onClick={handleSaveEdit}
                     disabled={saving}
-                    className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-emerald-700 disabled:opacity-50 font-medium"
+                    className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-brand-700 disabled:opacity-50 font-medium"
                   >
                     <Save className="w-4 h-4" />
                     {saving ? 'Guardando...' : 'Guardar Cambios'}
@@ -421,7 +421,7 @@ export function CodeRules() {
                         </td>
                         <td className="py-3 px-2">
                           <div className="flex items-center gap-2">
-                            <button onClick={() => loadRuleDetail(r.id)} className="text-emerald-600 hover:text-emerald-800 text-xs font-medium">
+                            <button onClick={() => loadRuleDetail(r.id)} className="text-brand-600 hover:text-brand-800 text-xs font-medium">
                               Detalle
                             </button>
                             <button

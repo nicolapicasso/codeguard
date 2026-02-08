@@ -1,8 +1,8 @@
 /**
- * k6 Load Test — CodeGuard Validation Endpoint
+ * k6 Load Test — OmniCodex Validation Endpoint
  *
  * Prerequisites:
- *   - CodeGuard running on localhost:3000
+ *   - OmniCodex running on localhost:3000
  *   - Database seeded (npm run db:seed)
  *   - Install k6: https://k6.io/docs/get-started/installation/
  *

@@ -67,7 +67,7 @@ export function CodeTester() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Tenant</label>
               <select value={selectedTenant} onChange={(e) => setSelectedTenant(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none">
                 <option value="">-- Tenant --</option>
                 {tenantList.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
@@ -75,7 +75,7 @@ export function CodeTester() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Proyecto</label>
               <select value={selectedProject} onChange={(e) => setSelectedProject(e.target.value)} disabled={!selectedTenant}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none">
                 <option value="">-- Proyecto --</option>
                 {projectList.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
@@ -83,7 +83,7 @@ export function CodeTester() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Regla</label>
               <select value={selectedRule} onChange={(e) => setSelectedRule(e.target.value)} disabled={!selectedProject}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none">
                 <option value="">-- Regla --</option>
                 {rules.map((r) => <option key={r.id} value={r.id}>{r.name} ({r.charset}, len:{r.totalLength})</option>)}
               </select>
@@ -100,14 +100,14 @@ export function CodeTester() {
               value={code}
               onChange={(e) => setCode(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleTest()}
-              className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-lg font-mono focus:ring-2 focus:ring-emerald-500 outline-none"
+              className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-lg font-mono focus:ring-2 focus:ring-brand-500 outline-none"
               placeholder="Introduce el codigo a probar..."
               disabled={!selectedRule}
             />
             <button
               onClick={handleTest}
               disabled={!selectedRule || !code.trim() || testing}
-              className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors font-medium"
+              className="flex items-center gap-2 bg-brand-600 text-white px-6 py-3 rounded-lg hover:bg-brand-700 disabled:opacity-50 transition-colors font-medium"
             >
               <Play className="w-5 h-5" />
               {testing ? 'Probando...' : 'Probar'}
@@ -118,11 +118,11 @@ export function CodeTester() {
 
       {/* Result */}
       {result && (
-        <Card className={`mb-6 border-2 ${isOk ? 'border-emerald-200' : 'border-red-200'}`}>
-          <CardHeader className={isOk ? 'bg-emerald-50' : 'bg-red-50'}>
+        <Card className={`mb-6 border-2 ${isOk ? 'border-brand-200' : 'border-red-200'}`}>
+          <CardHeader className={isOk ? 'bg-brand-50' : 'bg-red-50'}>
             <div className="flex items-center gap-2">
-              {isOk ? <CheckCircle className="w-5 h-5 text-emerald-600" /> : <XCircle className="w-5 h-5 text-red-600" />}
-              <span className={`font-bold ${isOk ? 'text-emerald-700' : 'text-red-700'}`}>
+              {isOk ? <CheckCircle className="w-5 h-5 text-brand-600" /> : <XCircle className="w-5 h-5 text-red-600" />}
+              <span className={`font-bold ${isOk ? 'text-brand-700' : 'text-red-700'}`}>
                 {result.status}
               </span>
               {!isOk && result.error_code && (
@@ -148,7 +148,7 @@ export function CodeTester() {
                 <div key={i} className="flex items-center gap-3 text-sm py-1 border-b border-gray-50">
                   <span className="text-gray-400 text-xs w-16">{h.time}</span>
                   {h.result.status === 'OK'
-                    ? <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                    ? <CheckCircle className="w-4 h-4 text-brand-500 flex-shrink-0" />
                     : <XCircle className="w-4 h-4 text-red-500 flex-shrink-0" />}
                   <code className="font-mono text-gray-700">{h.code}</code>
                   {h.result.status !== 'OK' && (

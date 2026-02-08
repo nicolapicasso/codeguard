@@ -38,8 +38,8 @@ export async function runPipeline(input: ValidateInput): Promise<ValidationResul
   const errorCode = status === 'KO' ? result.errorCode : 'none';
   const mode = input.sandbox ? 'sandbox' : input.dryRun ? 'dry_run' : 'live';
 
-  metrics.incrementCounter('codeguard_validations_total', { status, error_code: errorCode, mode });
-  metrics.observeHistogram('codeguard_validation_duration_ms', duration, { status, mode });
+  metrics.incrementCounter('omnicodex_validations_total', { status, error_code: errorCode, mode });
+  metrics.observeHistogram('omnicodex_validation_duration_ms', duration, { status, mode });
 
   return result;
 }

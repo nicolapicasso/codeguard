@@ -1,5 +1,5 @@
 {
-  "name": "codeguard",
+  "name": "omnicodex",
   "version": "0.1.0",
   "description": "Motor de Validación de Códigos Únicos — Middleware para OmniWallet",
   "main": "dist/server.js",

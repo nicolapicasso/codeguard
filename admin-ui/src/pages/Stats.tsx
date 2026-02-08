@@ -48,7 +48,7 @@ export function Stats() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Tenant</label>
               <select value={selectedTenant} onChange={(e) => setSelectedTenant(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none">
                 <option value="">-- Seleccionar Tenant --</option>
                 {tenantList.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
@@ -56,7 +56,7 @@ export function Stats() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Proyecto</label>
               <select value={selectedProject} onChange={(e) => setSelectedProject(e.target.value)} disabled={!selectedTenant}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none">
                 <option value="">-- Seleccionar Proyecto --</option>
                 {projectList.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
@@ -103,7 +103,7 @@ export function Stats() {
                     <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} />
                     <Tooltip />
-                    <Bar dataKey="count" fill="#059669" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="count" fill="#3E94AF" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>

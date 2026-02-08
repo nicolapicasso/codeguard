@@ -1,4 +1,4 @@
-# CodeGuard — Guía de Deploy en DigitalOcean
+# OmniCodex — Guía de Deploy en DigitalOcean
 
 ## Opción recomendada: Droplet con Docker Compose
 
@@ -16,7 +16,7 @@ Es la más directa porque ya tenemos `docker-compose.yml` listo.
    - **Size**: Basic → Regular → **$12/mes** (2 GB RAM, 1 vCPU) para MVP
      - Para producción real: $24/mes (4 GB RAM, 2 vCPU)
    - **Authentication**: SSH Key (recomendado) o Password
-   - **Hostname**: `codeguard`
+   - **Hostname**: `omnicodex`
 
 4. Clic en **Create Droplet** y apuntar la IP pública (ej: `164.90.xxx.xxx`)
 
@@ -53,8 +53,8 @@ apt install -y nginx certbot python3-certbot-nginx
 ### 2.3 — Crear usuario de aplicación (buena práctica)
 
 ```bash
-adduser --disabled-password codeguard
-usermod -aG docker codeguard
+adduser --disabled-password omnicodex
+usermod -aG docker omnicodex
 ```
 
 ---
@@ -64,9 +64,9 @@ usermod -aG docker codeguard
 ### Opción A: Clonar desde GitHub (recomendado)
 
 ```bash
-su - codeguard
-git clone https://github.com/nicolapicasso/codeguard.git
-cd codeguard
+su - omnicodex
+git clone https://github.com/nicolapicasso/omnicodex.git
+cd omnicodex
 ```
 
 ### Opción B: Subir con rsync desde tu máquina local
@@ -74,7 +74,7 @@ cd codeguard
 ```bash
 # Desde tu máquina local:
 rsync -avz --exclude node_modules --exclude .git --exclude admin-ui/node_modules \
-  /home/user/codeguard/ root@TU_IP:/home/codeguard/codeguard/
+  /home/user/omnicodex/ root@TU_IP:/home/omnicodex/omnicodex/
 ```
 
 ---
@@ -82,7 +82,7 @@ rsync -avz --exclude node_modules --exclude .git --exclude admin-ui/node_modules
 ## Paso 4 — Configurar variables de entorno para producción
 
 ```bash
-cd /home/codeguard/codeguard
+cd /home/omnicodex/omnicodex
 
 # Crear archivo .env de producción
 cat > .env.production << 'EOF'
@@ -91,7 +91,7 @@ PORT=3000
 HOST=0.0.0.0
 
 # Base de datos (dentro de Docker)
-DATABASE_URL=postgresql://codeguard:TU_PASSWORD_SEGURO_AQUI@postgres:5432/codeguard
+DATABASE_URL=postgresql://omnicodex:TU_PASSWORD_SEGURO_AQUI@postgres:5432/omnicodex
 
 # Redis (dentro de Docker)
 REDIS_URL=redis://redis:6379
@@ -135,13 +135,13 @@ services:
     image: postgres:16-alpine
     restart: always
     environment:
-      POSTGRES_USER: codeguard
+      POSTGRES_USER: omnicodex
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: codeguard
+      POSTGRES_DB: omnicodex
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U codeguard"]
+      test: ["CMD-SHELL", "pg_isready -U omnicodex"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -191,7 +191,7 @@ YAML
 ## Paso 6 — Build y arranque
 
 ```bash
-cd /home/codeguard/codeguard
+cd /home/omnicodex/omnicodex
 
 # Exportar password de PostgreSQL (el mismo que pusiste en .env.production)
 export POSTGRES_PASSWORD=tu-password-seguro
@@ -232,7 +232,7 @@ curl http://localhost:8080
 ### 7.1 — Sin dominio (acceso por IP)
 
 ```bash
-cat > /etc/nginx/sites-available/codeguard << 'NGINX'
+cat > /etc/nginx/sites-available/omnicodex << 'NGINX'
 server {
     listen 80;
     server_name _;
@@ -264,7 +264,7 @@ server {
 NGINX
 
 # Activar el site
-ln -sf /etc/nginx/sites-available/codeguard /etc/nginx/sites-enabled/
+ln -sf /etc/nginx/sites-available/omnicodex /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
 
 # Verificar config y reiniciar
@@ -279,35 +279,35 @@ Ya puedes acceder:
 
 ### 7.2 — Con dominio + HTTPS (recomendado para producción)
 
-Si tienes un dominio (ej: `codeguard.tudominio.com`):
+Si tienes un dominio (ej: `omnicodex.tudominio.com`):
 
 **a) Configurar DNS**: Crear un registro A apuntando a la IP del Droplet
 
 | Tipo | Host | Valor |
 |------|------|-------|
-| A | codeguard | 164.90.xxx.xxx |
+| A | omnicodex | 164.90.xxx.xxx |
 
 **b) Actualizar Nginx** con el dominio:
 
 ```bash
-# Editar /etc/nginx/sites-available/codeguard
-# Cambiar la línea: server_name _; → server_name codeguard.tudominio.com;
-sed -i 's/server_name _;/server_name codeguard.tudominio.com;/' /etc/nginx/sites-available/codeguard
+# Editar /etc/nginx/sites-available/omnicodex
+# Cambiar la línea: server_name _; → server_name omnicodex.tudominio.com;
+sed -i 's/server_name _;/server_name omnicodex.tudominio.com;/' /etc/nginx/sites-available/omnicodex
 nginx -t && systemctl reload nginx
 ```
 
 **c) Obtener certificado SSL con Let's Encrypt (gratis)**:
 
 ```bash
-certbot --nginx -d codeguard.tudominio.com
+certbot --nginx -d omnicodex.tudominio.com
 ```
 
 Certbot configura HTTPS automáticamente y renueva el certificado cada 90 días.
 
 Resultado:
-- `https://codeguard.tudominio.com/` → Admin Panel
-- `https://codeguard.tudominio.com/api/v1/validate` → API
-- `https://codeguard.tudominio.com/docs` → Swagger
+- `https://omnicodex.tudominio.com/` → Admin Panel
+- `https://omnicodex.tudominio.com/api/v1/validate` → API
+- `https://omnicodex.tudominio.com/docs` → Swagger
 
 ---
 
@@ -336,7 +336,7 @@ docker compose -f docker-compose.prod.yml logs -f admin-ui
 
 ### Actualizar código
 ```bash
-cd /home/codeguard/codeguard
+cd /home/omnicodex/omnicodex
 git pull origin main
 docker compose -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.prod.yml exec app npx prisma migrate deploy
@@ -346,11 +346,11 @@ docker compose -f docker-compose.prod.yml exec app npx prisma migrate deploy
 ```bash
 # Backup
 docker compose -f docker-compose.prod.yml exec postgres \
-  pg_dump -U codeguard codeguard > backup_$(date +%Y%m%d).sql
+  pg_dump -U omnicodex omnicodex > backup_$(date +%Y%m%d).sql
 
 # Restore
 cat backup_20250115.sql | docker compose -f docker-compose.prod.yml exec -T postgres \
-  psql -U codeguard codeguard
+  psql -U omnicodex omnicodex
 ```
 
 ### Monitorizar
@@ -384,7 +384,7 @@ Si prefieres no gestionar servidor, puedes usar App Platform (PaaS):
 
 1. Conectar repositorio GitHub
 2. Crear 3 componentes:
-   - **Web Service**: `codeguard` (Dockerfile en raíz)
+   - **Web Service**: `omnicodex` (Dockerfile en raíz)
    - **Static Site**: `admin-ui` (build command: `npm run build`, output: `dist`)
    - **Database**: PostgreSQL (managed, $12/mes extra)
 3. Añadir Redis como add-on ($15/mes)

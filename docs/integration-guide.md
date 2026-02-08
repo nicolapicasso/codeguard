@@ -1,4 +1,4 @@
-# CodeGuard — Guía de Integración para OmniWallet
+# OmniCodex — Guía de Integración para OmniWallet
 
 ## Índice
 
@@ -21,7 +21,7 @@
 
 ```
 ┌──────────┐     ┌───────────────┐     ┌───────────┐
-│  Usuario  │────▶│  OmniWallet   │────▶│ CodeGuard │
+│  Usuario  │────▶│  OmniWallet   │────▶│ OmniCodex │
 │  (App)    │     │  (Backend)    │     │   (API)   │
 └──────────┘     └───────────────┘     └───────────┘
       │                  │                     │
@@ -44,7 +44,7 @@
 ```
 
 **Responsabilidades:**
-- **CodeGuard** valida el código, verifica unicidad, registra el canje
+- **OmniCodex** valida el código, verifica unicidad, registra el canje
 - **OmniWallet** gestiona la UX, asigna puntos, gestiona la fidelización
 
 ---
@@ -79,7 +79,7 @@ BODY='{"code":"ABC12345678","project_id":"uuid-del-proyecto"}'
 TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "$API_SECRET" | cut -d' ' -f2)
 
-curl -X POST http://codeguard.example.com/api/v1/validate \
+curl -X POST http://omnicodex.example.com/api/v1/validate \
   -H "Content-Type: application/json" \
   -H "X-Api-Key: $API_KEY" \
   -H "X-Timestamp: $TIMESTAMP" \
@@ -113,7 +113,7 @@ Valida el código y lo marca como canjeado (single-use).
 | Campo | Tipo | Obligatorio | Descripción |
 |-------|------|:-----------:|-------------|
 | `code` | string | Sí | Código impreso tal cual lo escanea el usuario |
-| `project_id` | UUID | Sí | ID del proyecto/campaña en CodeGuard |
+| `project_id` | UUID | Sí | ID del proyecto/campaña en OmniCodex |
 | `ow_user_id` | string | No | ID del usuario en OmniWallet |
 | `ow_transaction_id` | string | No | ID de transacción en OmniWallet |
 | `country` | string | No | Código ISO 3166-1 alpha-2 (ej: `ES`, `MX`) para geo-fencing |
@@ -271,7 +271,7 @@ Ejecuta el pipeline completo **sin registrar el canje** (fases 1-5, sin fase 6).
 
 ## 8. Rate Limiting
 
-CodeGuard aplica dos niveles de rate limiting:
+OmniCodex aplica dos niveles de rate limiting:
 
 | Nivel | Límite default | Clave |
 |-------|:-------------:|-------|
@@ -302,14 +302,14 @@ Si se excede:
 
 ## 9. Modo Sandbox
 
-CodeGuard soporta un **modo sandbox** para pruebas de integración sin afectar datos de producción.
+OmniCodex soporta un **modo sandbox** para pruebas de integración sin afectar datos de producción.
 
 ### Cómo activar
 
 Enviar el header `X-Sandbox: true` en las peticiones de validación:
 
 ```bash
-curl -X POST http://codeguard.example.com/api/v1/validate \
+curl -X POST http://omnicodex.example.com/api/v1/validate \
   -H "Content-Type: application/json" \
   -H "X-Api-Key: $API_KEY" \
   -H "X-Timestamp: $TIMESTAMP" \
@@ -345,7 +345,7 @@ Las respuestas sandbox incluyen un campo adicional:
 
 ## 10. Geo-fencing
 
-CodeGuard soporta restricción geográfica por regla de código. Si una regla tiene países permitidos configurados, solo se aceptarán canjes desde esos países.
+OmniCodex soporta restricción geográfica por regla de código. Si una regla tiene países permitidos configurados, solo se aceptarán canjes desde esos países.
 
 ### Uso
 
@@ -414,7 +414,7 @@ import crypto from 'crypto';
 
 const API_KEY = 'cg_your_api_key';
 const API_SECRET = 'your_api_secret';
-const BASE_URL = 'https://codeguard.example.com';
+const BASE_URL = 'https://omnicodex.example.com';
 
 async function validateCode(code: string, projectId: string, userId?: string) {
   const body = JSON.stringify({
@@ -463,7 +463,7 @@ from datetime import datetime, timezone
 
 API_KEY = 'cg_your_api_key'
 API_SECRET = 'your_api_secret'
-BASE_URL = 'https://codeguard.example.com'
+BASE_URL = 'https://omnicodex.example.com'
 
 def validate_code(code: str, project_id: str, user_id: str = None):
     body = {
@@ -508,7 +508,7 @@ else:
 <?php
 $apiKey = 'cg_your_api_key';
 $apiSecret = 'your_api_secret';
-$baseUrl = 'https://codeguard.example.com';
+$baseUrl = 'https://omnicodex.example.com';
 
 function validateCode(string $code, string $projectId, ?string $userId = null): array {
     global $apiKey, $apiSecret, $baseUrl;
@@ -558,10 +558,10 @@ import javax.crypto.spec.SecretKeySpec;
 import java.net.http.*;
 import java.time.Instant;
 
-public class CodeGuardClient {
+public class OmniCodexClient {
     private static final String API_KEY = "cg_your_api_key";
     private static final String API_SECRET = "your_api_secret";
-    private static final String BASE_URL = "https://codeguard.example.com";
+    private static final String BASE_URL = "https://omnicodex.example.com";
 
     public static String validateCode(String code, String projectId, String userId)
             throws Exception {
@@ -604,7 +604,7 @@ public class CodeGuardClient {
 
 ## Checklist de Integración
 
-- [ ] Obtener `api_key` y `api_secret` del Admin Panel de CodeGuard
+- [ ] Obtener `api_key` y `api_secret` del Admin Panel de OmniCodex
 - [ ] Implementar generación de HMAC-SHA256 en el backend de OmniWallet
 - [ ] Configurar el `project_id` correspondiente a cada campaña
 - [ ] Integrar `POST /api/v1/validate` en el flujo de escaneo

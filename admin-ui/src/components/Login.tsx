@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Shield } from 'lucide-react';
+import { ScanBarcode } from 'lucide-react';
 import { setToken } from '../lib/api';
 
 interface LoginProps {
@@ -41,8 +41,8 @@ export function Login({ onLogin }: LoginProps) {
     <div className="min-h-screen bg-gray-900 flex items-center justify-center">
       <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-md">
         <div className="flex items-center justify-center gap-2 mb-6">
-          <Shield className="w-8 h-8 text-emerald-600" />
-          <h1 className="text-2xl font-bold text-gray-900">CodeGuard Admin</h1>
+          <ScanBarcode className="w-8 h-8 text-brand-600" />
+          <h1 className="text-2xl font-bold text-gray-900">OmniCodex Admin</h1>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -54,7 +54,7 @@ export function Login({ onLogin }: LoginProps) {
               type="password"
               value={token}
               onChange={(e) => setTokenInput(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none"
               placeholder="Introduce tu JWT token"
             />
           </div>
@@ -65,7 +65,7 @@ export function Login({ onLogin }: LoginProps) {
 
           <button
             type="submit"
-            className="w-full bg-emerald-600 text-white py-2 px-4 rounded-lg hover:bg-emerald-700 transition-colors font-medium"
+            className="w-full bg-brand-600 text-white py-2 px-4 rounded-lg hover:bg-brand-700 transition-colors font-medium"
           >
             Acceder
           </button>
