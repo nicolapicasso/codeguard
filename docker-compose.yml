@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: codeguard
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: codeguard
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U codeguard"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOST: 0.0.0.0
+      DATABASE_URL: postgresql://codeguard:secret@postgres:5432/codeguard
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: change-me-in-production
+      HMAC_TOLERANCE_SECONDS: 300
+      RATE_LIMIT_PER_USER_PER_MINUTE: 30
+      RATE_LIMIT_PER_IP_PER_MINUTE: 100
+      STORE_PLAIN_CODES: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
