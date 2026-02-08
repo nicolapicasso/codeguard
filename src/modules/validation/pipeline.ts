@@ -7,7 +7,7 @@ import { validateSegments } from './segments.js';
 import { validateCheckDigit } from './check-digit/index.js';
 import { validateVigency } from './vigency.js';
 import { validateUniqueness } from './uniqueness.js';
-import { prisma } from '../../utils/prisma.js';
+import { getCachedProjectWithRules } from '../../utils/cache.js';
 
 export interface ValidateInput {
   code: string;
@@ -24,11 +24,8 @@ export interface ValidateInput {
  * If dryRun is true, skips Phase 6 (uniqueness/redemption).
  */
 export async function runPipeline(input: ValidateInput): Promise<ValidationResult> {
-  // Load project with its code rules
-  const project = await prisma.project.findUnique({
-    where: { id: input.projectId },
-    include: { codeRules: { where: { isActive: true } } },
-  });
+  // Load project with its code rules (cached in Redis, TTL 5 min)
+  const project = await getCachedProjectWithRules(input.projectId);
 
   if (!project) {
     return {

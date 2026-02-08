@@ -1,6 +1,8 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import { config } from './config/index.js';
 import { logger } from './utils/logger.js';
 import { prisma } from './utils/prisma.js';
@@ -22,8 +24,39 @@ export async function buildApp() {
 
   // Plugins
   await app.register(cors, { origin: true });
-  await app.register(helmet);
+  await app.register(helmet, { contentSecurityPolicy: false });
   await registerRateLimiter(app);
+
+  // OpenAPI / Swagger
+  await app.register(swagger, {
+    openapi: {
+      info: {
+        title: 'CodeGuard API',
+        description: 'Motor de Validación de Códigos Únicos — Middleware para OmniWallet',
+        version: '1.0.0',
+      },
+      servers: [{ url: `http://localhost:${config.port}` }],
+      components: {
+        securitySchemes: {
+          apiKey: {
+            type: 'apiKey',
+            in: 'header',
+            name: 'X-Api-Key',
+            description: 'API Key del tenant para Validation API',
+          },
+          bearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT',
+            description: 'JWT token para Admin API',
+          },
+        },
+      },
+    },
+  });
+  await app.register(swaggerUi, {
+    routePrefix: '/docs',
+  });
 
   // Middleware
   app.addHook('onRequest', requestLogger);

@@ -1,5 +1,6 @@
 import type { Charset, CheckAlgorithm, CheckDigitPos, Prisma } from '@prisma/client';
 import { prisma } from '../../utils/prisma.js';
+import { invalidateProjectCache } from '../../utils/cache.js';
 
 export interface CreateCodeRuleInput {
   name: string;
@@ -22,6 +23,7 @@ export interface CreateCodeRuleInput {
 }
 
 export async function createCodeRule(projectId: string, data: CreateCodeRuleInput) {
+  await invalidateProjectCache(projectId);
   return prisma.codeRule.create({
     data: {
       projectId,
@@ -73,7 +75,7 @@ export async function updateCodeRule(id: string, data: {
   campaignInfo?: Record<string, unknown>;
   pointsValue?: number;
 }) {
-  return prisma.codeRule.update({
+  const rule = await prisma.codeRule.update({
     where: { id },
     data: {
       name: data.name,
@@ -85,4 +87,6 @@ export async function updateCodeRule(id: string, data: {
       pointsValue: data.pointsValue,
     },
   });
+  await invalidateProjectCache(rule.projectId);
+  return rule;
 }

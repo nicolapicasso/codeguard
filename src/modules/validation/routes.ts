@@ -2,11 +2,15 @@ import type { FastifyInstance } from 'fastify';
 import { verifyApiKey } from '../auth/api-key.js';
 import { runPipeline } from './pipeline.js';
 import { prisma } from '../../utils/prisma.js';
+import { registerUserRateLimiter } from '../../middleware/rate-limiter.js';
 import { validateRequestSchema, validateCheckQuerySchema, listCodesQuerySchema } from './schemas.js';
 
 export async function validationRoutes(app: FastifyInstance): Promise<void> {
   // All validation routes require API Key auth
   app.addHook('onRequest', verifyApiKey);
+
+  // Per-user rate limiting for validation endpoints
+  await registerUserRateLimiter(app);
 
   // POST /api/v1/validate — Validate and redeem a code
   app.post('/api/v1/validate', {

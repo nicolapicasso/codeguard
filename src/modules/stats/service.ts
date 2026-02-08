@@ -1,7 +1,7 @@
 import { prisma } from '../../utils/prisma.js';
 
 export async function getProjectStats(projectId: string) {
-  const [totalRedemptions, uniqueUsers, byRule, errorRate] = await Promise.all([
+  const [totalRedemptions, uniqueUsers, byRule, byDay] = await Promise.all([
     prisma.redeemedCode.count({
       where: { codeRule: { projectId } },
     }),
@@ -14,7 +14,7 @@ export async function getProjectStats(projectId: string) {
       where: { codeRule: { projectId } },
       _count: true,
     }),
-    Promise.resolve(0), // Error rate would require audit logging — placeholder
+    getRedemptionsByDay(projectId, 30),
   ]);
 
   const rules = await prisma.codeRule.findMany({
@@ -33,6 +33,26 @@ export async function getProjectStats(projectId: string) {
       rule_name: ruleMap.get(r.codeRuleId) || 'Unknown',
       count: r._count,
     })),
-    error_rate: errorRate,
+    by_day: byDay,
   };
+}
+
+async function getRedemptionsByDay(projectId: string, days: number) {
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+
+  const results = await prisma.$queryRaw<Array<{ date: string; count: bigint }>>`
+    SELECT DATE(rc."redeemed_at") as date, COUNT(*) as count
+    FROM redeemed_codes rc
+    JOIN code_rules cr ON rc."code_rule_id" = cr.id
+    WHERE cr."project_id" = ${projectId}
+      AND rc."redeemed_at" >= ${since}
+    GROUP BY DATE(rc."redeemed_at")
+    ORDER BY date DESC
+  `;
+
+  return results.map((r) => ({
+    date: String(r.date),
+    count: Number(r.count),
+  }));
 }

@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../utils/prisma.js';
+import { invalidateProjectCache } from '../../utils/cache.js';
 
 export async function createProject(tenantId: string, data: {
   name: string;
@@ -46,7 +47,7 @@ export async function updateProject(id: string, data: {
   isActive?: boolean;
   metadata?: Record<string, unknown>;
 }) {
-  return prisma.project.update({
+  const project = await prisma.project.update({
     where: { id },
     data: {
       name: data.name,
@@ -57,11 +58,15 @@ export async function updateProject(id: string, data: {
       metadata: data.metadata as Prisma.InputJsonValue | undefined,
     },
   });
+  await invalidateProjectCache(id);
+  return project;
 }
 
 export async function deleteProject(id: string) {
-  return prisma.project.update({
+  const project = await prisma.project.update({
     where: { id },
     data: { isActive: false },
   });
+  await invalidateProjectCache(id);
+  return project;
 }
