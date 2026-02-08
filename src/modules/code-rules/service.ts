@@ -94,3 +94,9 @@ export async function updateCodeRule(id: string, data: {
   await invalidateProjectCache(rule.projectId);
   return rule;
 }
+
+export async function deleteCodeRule(id: string) {
+  const rule = await prisma.codeRule.delete({ where: { id } });
+  await invalidateProjectCache(rule.projectId);
+  return rule;
+}

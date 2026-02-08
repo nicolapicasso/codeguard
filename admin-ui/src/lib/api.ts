@@ -73,6 +73,7 @@ export const codeRules = {
   get: (id: string) => request<any>(`/api/admin/rules/${id}`),
   create: (projectId: string, data: any) => request<any>(`/api/admin/projects/${projectId}/rules`, { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: any) => request<any>(`/api/admin/rules/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) => request<void>(`/api/admin/rules/${id}`, { method: 'DELETE' }),
   test: (id: string, code: string) => request<any>(`/api/admin/rules/${id}/test`, { method: 'POST', body: JSON.stringify({ code }) }),
 };
 

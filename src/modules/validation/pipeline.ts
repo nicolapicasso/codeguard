@@ -77,13 +77,14 @@ async function tryRule(
   // Phase 1: Normalize
   const normalizedCode = normalize(input.code, codeRule);
 
-  // Phase 2: Structure
-  const structureError = validateStructure(normalizedCode, codeRule);
-  if (structureError) return null; // Not this rule, try next
+  // Phase 2: Structure (validates prefix, length, charset — returns payload without prefix)
+  const structureResult = validateStructure(normalizedCode, codeRule);
+  if ('error' in structureResult) return null; // Not this rule, try next
+  const payload = structureResult.payload;
 
-  // Phase 3: Segments
+  // Phase 3: Segments (on payload without prefix)
   const structureDef = codeRule.structureDef as unknown as StructureDefinition;
-  const { error: segmentError, parsedSegments } = validateSegments(normalizedCode, structureDef);
+  const { error: segmentError, parsedSegments } = validateSegments(payload, structureDef);
   if (segmentError) return null; // Not this rule, try next
 
   // Phase 4: Check digit

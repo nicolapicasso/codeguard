@@ -31,7 +31,7 @@ function makeCodeRule(overrides: Partial<CodeRule> = {}): CodeRule {
     projectId: 'proj-1',
     name: 'Test Rule',
     skuReference: null,
-    totalLength: 15,
+    totalLength: 13,
     charset: 'ALPHANUMERIC',
     customCharset: null,
     hasCheckDigit: true,
@@ -47,22 +47,24 @@ function makeCodeRule(overrides: Partial<CodeRule> = {}): CodeRule {
     },
     separator: '-',
     caseSensitive: false,
-    prefix: 'DN',
+    prefix: null,
     maxRedemptions: 1,
     productInfo: null,
     campaignInfo: null,
     pointsValue: null,
     customCheckFunction: null,
+    allowedCountries: [],
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
-  };
+  } as CodeRule;
 }
 
 describe('Pipeline integration (phases 1-5, without DB)', () => {
   it('runs a complete validation flow for a valid alphanumeric code', async () => {
-    const rule = makeCodeRule();
+    // totalLength = 2+4+8+1 = 15, no prefix
+    const rule = makeCodeRule({ totalLength: 15 });
     const project = makeProject();
     const structureDef = rule.structureDef as unknown as StructureDefinition;
 
@@ -70,27 +72,25 @@ describe('Pipeline integration (phases 1-5, without DB)', () => {
     const normalized = normalize('DN-2026-ABCD1234-7', rule);
     expect(normalized).toBe('DN2026ABCD12347');
 
-    // Phase 2: Structure
-    const structErr = validateStructure(normalized, rule);
-    expect(structErr).toBeNull();
+    // Phase 2: Structure (returns payload — same as normalized since no prefix)
+    const structResult = validateStructure(normalized, rule);
+    expect('payload' in structResult).toBe(true);
+    const payload = 'payload' in structResult ? structResult.payload : '';
 
     // Phase 3: Segments
-    const { error: segErr, parsedSegments } = validateSegments(normalized, structureDef);
+    const { error: segErr, parsedSegments } = validateSegments(payload, structureDef);
     expect(segErr).toBeNull();
     expect(parsedSegments.get('brand_prefix')).toBe('DN');
     expect(parsedSegments.get('year')).toBe('2026');
     expect(parsedSegments.get('unique_code')).toBe('ABCD1234');
     expect(parsedSegments.get('check_digit')).toBe('7');
 
-    // Phase 4: Check digit — verify that the check digit is correct
+    // Phase 4: Check digit
     const checkSegment = structureDef.segments.find(
       (s): s is CheckSegment => s.type === 'check',
     )!;
     const dataInput = checkSegment.appliesTo.map(n => parsedSegments.get(n)!).join('');
-    // Note: Luhn on alphanumeric needs numeric input, so this particular test
-    // validates the pipeline logic rather than the actual Luhn result
     const checkResult = parsedSegments.get(checkSegment.name)!;
-    // Luhn only works on numeric, so we just verify the pipeline extracts correctly
     expect(dataInput).toBe('ABCD1234');
     expect(checkResult).toBe('7');
 
@@ -120,9 +120,11 @@ describe('Pipeline integration (phases 1-5, without DB)', () => {
     const structureDef = rule.structureDef as unknown as StructureDefinition;
 
     const normalized = normalize(fullCode, rule);
-    expect(validateStructure(normalized, rule)).toBeNull();
+    const structResult = validateStructure(normalized, rule);
+    expect('payload' in structResult).toBe(true);
+    const payload = 'payload' in structResult ? structResult.payload : '';
 
-    const { error, parsedSegments } = validateSegments(normalized, structureDef);
+    const { error, parsedSegments } = validateSegments(payload, structureDef);
     expect(error).toBeNull();
 
     const isValid = await validateCheckDigit(
@@ -158,12 +160,13 @@ describe('Pipeline integration (phases 1-5, without DB)', () => {
     const structureDef = rule.structureDef as unknown as StructureDefinition;
 
     const normalized = normalize(fullCode, rule);
-    expect(validateStructure(normalized, rule)).toBeNull();
+    const structResult = validateStructure(normalized, rule);
+    expect('payload' in structResult).toBe(true);
+    const payload = 'payload' in structResult ? structResult.payload : '';
 
-    const { error, parsedSegments } = validateSegments(normalized, structureDef);
+    const { error, parsedSegments } = validateSegments(payload, structureDef);
     expect(error).toBeNull();
     expect(parsedSegments.get('batch')).toBe('100');
-    expect(parseInt(parsedSegments.get('batch')!, 10)).toBeGreaterThanOrEqual(100);
 
     const dataInput = ['batch', 'serial'].map(n => parsedSegments.get(n)!).join('');
     const isValid = await validateCheckDigit('MOD10', dataInput, parsedSegments.get('check_digit')!);
@@ -207,5 +210,30 @@ describe('Pipeline integration (phases 1-5, without DB)', () => {
     const result = validateVigency(project, rule);
     expect(result).not.toBeNull();
     expect(result!.errorCode).toBe('PROJECT_EXPIRED');
+  });
+
+  it('handles prefix correctly — strips it before segment validation', async () => {
+    const rule = makeCodeRule({
+      totalLength: 4,
+      charset: 'NUMERIC',
+      separator: null,
+      prefix: 'DAN',
+      hasCheckDigit: false,
+      checkAlgorithm: null,
+      structureDef: {
+        segments: [
+          { name: 'codigo', type: 'numeric', length: 4 },
+        ],
+      },
+    });
+
+    const normalized = normalize('DAN4444', rule);
+    expect(normalized).toBe('DAN4444');
+
+    const structResult = validateStructure(normalized, rule);
+    expect('payload' in structResult).toBe(true);
+    if ('payload' in structResult) {
+      expect(structResult.payload).toBe('4444');
+    }
   });
 });

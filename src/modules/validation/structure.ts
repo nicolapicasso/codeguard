@@ -11,50 +11,70 @@ const CHARSET_PATTERNS: Record<Charset, RegExp> = {
 
 /**
  * Phase 2 — Structure Validation
- * Checks total length, charset, and prefix.
+ * Checks prefix, total length (payload only), and charset (payload only).
+ * Returns the payload (code without prefix) on success, or an error.
  */
 export function validateStructure(
   normalizedCode: string,
   rule: CodeRule,
-): ValidationFailure | null {
-  if (normalizedCode.length !== rule.totalLength) {
+): { error: ValidationFailure } | { payload: string } {
+  // Check prefix first
+  if (rule.prefix) {
+    const prefix = rule.caseSensitive ? rule.prefix : rule.prefix.toUpperCase();
+    if (!normalizedCode.startsWith(prefix)) {
+      return {
+        error: {
+          status: 'KO',
+          errorCode: 'INVALID_STRUCTURE',
+          errorMessage: `Code does not start with expected prefix "${rule.prefix}"`,
+          details: { expectedPrefix: rule.prefix },
+        },
+      };
+    }
+  }
+
+  // Strip prefix to get the payload
+  const payload = rule.prefix
+    ? normalizedCode.slice(rule.caseSensitive ? rule.prefix.length : rule.prefix.toUpperCase().length)
+    : normalizedCode;
+
+  // Check length on payload only
+  if (payload.length !== rule.totalLength) {
     return {
-      status: 'KO',
-      errorCode: 'INVALID_STRUCTURE',
-      errorMessage: `Expected length ${rule.totalLength}, got ${normalizedCode.length}`,
-      details: { expected: rule.totalLength, actual: normalizedCode.length },
+      error: {
+        status: 'KO',
+        errorCode: 'INVALID_STRUCTURE',
+        errorMessage: `Expected payload length ${rule.totalLength}, got ${payload.length}`,
+        details: { expected: rule.totalLength, actual: payload.length },
+      },
     };
   }
 
+  // Check charset on payload only
   if (rule.charset === 'CUSTOM' && rule.customCharset) {
     const escaped = rule.customCharset.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const pattern = new RegExp(`^[${escaped}]+$`);
-    if (!pattern.test(normalizedCode)) {
+    if (!pattern.test(payload)) {
       return {
-        status: 'KO',
-        errorCode: 'INVALID_STRUCTURE',
-        errorMessage: `Code contains characters outside the custom charset`,
+        error: {
+          status: 'KO',
+          errorCode: 'INVALID_STRUCTURE',
+          errorMessage: `Code contains characters outside the custom charset`,
+        },
       };
     }
   } else {
     const pattern = CHARSET_PATTERNS[rule.charset];
-    if (!pattern.test(normalizedCode)) {
+    if (!pattern.test(payload)) {
       return {
-        status: 'KO',
-        errorCode: 'INVALID_STRUCTURE',
-        errorMessage: `Code contains characters outside the ${rule.charset} charset`,
+        error: {
+          status: 'KO',
+          errorCode: 'INVALID_STRUCTURE',
+          errorMessage: `Code contains characters outside the ${rule.charset} charset`,
+        },
       };
     }
   }
 
-  if (rule.prefix && !normalizedCode.startsWith(rule.prefix)) {
-    return {
-      status: 'KO',
-      errorCode: 'INVALID_STRUCTURE',
-      errorMessage: `Code does not start with expected prefix "${rule.prefix}"`,
-      details: { expectedPrefix: rule.prefix },
-    };
-  }
-
-  return null;
+  return { payload };
 }
