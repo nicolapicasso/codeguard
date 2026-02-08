@@ -1,0 +1,113 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id         String    @id @default(uuid())
+  owTenantId String    @unique @map("ow_tenant_id")
+  name       String
+  apiKey     String    @unique @map("api_key")
+  apiSecret  String    @map("api_secret")
+  isActive   Boolean   @default(true) @map("is_active")
+  webhookUrl String?   @map("webhook_url")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  projects   Project[]
+
+  @@map("tenants")
+}
+
+model Project {
+  id          String     @id @default(uuid())
+  tenantId    String     @map("tenant_id")
+  tenant      Tenant     @relation(fields: [tenantId], references: [id])
+  name        String
+  description String?
+  startsAt    DateTime?  @map("starts_at")
+  endsAt      DateTime?  @map("ends_at")
+  isActive    Boolean    @default(true) @map("is_active")
+  metadata    Json?
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  codeRules   CodeRule[]
+
+  @@map("projects")
+}
+
+model CodeRule {
+  id                 String          @id @default(uuid())
+  projectId          String          @map("project_id")
+  project            Project         @relation(fields: [projectId], references: [id])
+  name               String
+  skuReference       String?         @map("sku_reference")
+  totalLength        Int             @map("total_length")
+  charset            Charset
+  customCharset      String?         @map("custom_charset")
+  hasCheckDigit      Boolean         @map("has_check_digit")
+  checkAlgorithm     CheckAlgorithm? @map("check_algorithm")
+  checkDigitPosition CheckDigitPos?  @map("check_digit_position")
+  structureDef       Json            @map("structure_def")
+  separator          String?
+  caseSensitive      Boolean         @default(false) @map("case_sensitive")
+  prefix             String?
+  maxRedemptions     Int             @default(1) @map("max_redemptions")
+  productInfo        Json?           @map("product_info")
+  campaignInfo       Json?           @map("campaign_info")
+  pointsValue        Int?            @map("points_value")
+  customCheckFunction String?        @map("custom_check_function")
+  allowedCountries   String[]        @default([]) @map("allowed_countries")
+  isActive           Boolean         @default(true) @map("is_active")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+  redeemedCodes      RedeemedCode[]
+
+  @@map("code_rules")
+}
+
+model RedeemedCode {
+  id              String   @id @default(uuid())
+  codeRuleId      String   @map("code_rule_id")
+  codeRule        CodeRule  @relation(fields: [codeRuleId], references: [id])
+  codeHash        String   @map("code_hash") @db.VarChar(64)
+  codePlain       String?  @map("code_plain")
+  owUserId        String?  @map("ow_user_id")
+  owTransactionId String?  @map("ow_transaction_id")
+  redemptionCount Int      @default(1) @map("redemption_count")
+  redeemedAt      DateTime @default(now()) @map("redeemed_at")
+  ipAddress       String?  @map("ip_address")
+  metadata        Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@unique([codeRuleId, codeHash])
+  @@index([owUserId])
+  @@index([redeemedAt])
+  @@map("redeemed_codes")
+}
+
+enum Charset {
+  NUMERIC
+  ALPHA_UPPER
+  ALPHA_LOWER
+  ALPHANUMERIC
+  CUSTOM
+}
+
+enum CheckAlgorithm {
+  LUHN
+  MOD10
+  MOD11
+  MOD97
+  VERHOEFF
+  DAMM
+  CUSTOM
+}
+
+enum CheckDigitPos {
+  LAST
+  FIRST
+}
