@@ -1,0 +1,87 @@
+# Digital Ocean App Platform Specification
+# Docs: https://docs.digitalocean.com/products/app-platform/reference/app-spec/
+#
+# Deploy: doctl apps create --spec .do/app.yaml
+# Update: doctl apps update <app-id> --spec .do/app.yaml
+
+name: codeguard
+
+region: nyc
+
+services:
+  # ── Backend API ──────────────────────────────────────────
+  - name: api
+    github:
+      repo: nicolapicasso/codeguard       # ← change to your repo
+      branch: main
+      deploy_on_push: true
+    dockerfile_path: Dockerfile
+    instance_count: 1
+    instance_size_slug: basic-xxs          # $5/mo — scale up as needed
+    http_port: 3000
+    health_check:
+      http_path: /health/live
+      initial_delay_seconds: 15
+      period_seconds: 10
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      - key: HOST
+        value: "0.0.0.0"
+      - key: DATABASE_URL
+        value: ${db.DATABASE_URL}
+        scope: RUN_AND_BUILD_TIME
+      - key: REDIS_URL
+        value: ${redis.REDIS_URL}
+        scope: RUN_TIME
+      - key: JWT_SECRET
+        type: SECRET
+        value: CHANGE_ME_GENERATE_A_SECURE_SECRET
+      - key: HMAC_TOLERANCE_SECONDS
+        value: "300"
+      - key: RATE_LIMIT_PER_USER_PER_MINUTE
+        value: "30"
+      - key: RATE_LIMIT_PER_IP_PER_MINUTE
+        value: "100"
+      - key: STORE_PLAIN_CODES
+        value: "false"
+      - key: LOG_LEVEL
+        value: info
+      - key: SEED_ON_DEPLOY
+        value: "false"
+    routes:
+      - path: /api
+      - path: /health
+      - path: /docs
+
+  # ── Admin UI (static site) ──────────────────────────────
+  - name: admin-ui
+    github:
+      repo: nicolapicasso/codeguard       # ← change to your repo
+      branch: main
+      deploy_on_push: true
+    dockerfile_path: admin-ui/Dockerfile
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    http_port: 80
+    routes:
+      - path: /
+
+# ── Managed Database ────────────────────────────────────────
+databases:
+  - name: db
+    engine: PG
+    version: "16"
+    size: db-s-dev-database               # $7/mo dev database
+    num_nodes: 1
+
+  - name: redis
+    engine: REDIS
+    version: "7"
+    size: db-s-dev-database
+    num_nodes: 1

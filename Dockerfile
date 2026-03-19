@@ -14,6 +14,8 @@ RUN npm run build
 
 FROM node:20-alpine
 
+RUN apk add --no-cache curl
+
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -23,7 +25,11 @@ COPY prisma ./prisma
 RUN npx prisma generate
 
 COPY --from=builder /app/dist ./dist
+COPY scripts/docker-entrypoint.sh ./docker-entrypoint.sh
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:3000/health/live || exit 1
 
 EXPOSE 3000
 
-CMD ["node", "dist/server.js"]
+ENTRYPOINT ["./docker-entrypoint.sh"]
