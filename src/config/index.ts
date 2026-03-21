@@ -16,4 +16,13 @@ export const config = {
 
   storePlainCodes: process.env.STORE_PLAIN_CODES === 'true',
   customFunctionTimeoutMs: parseInt(process.env.CUSTOM_FUNCTION_TIMEOUT_MS || '100', 10),
+
+  // Geo-fencing: comma-separated ISO 3166-1 alpha-2 codes (e.g., "KP,IR,CU,SY")
+  globalBannedCountries: (process.env.GLOBAL_BANNED_COUNTRIES || '')
+    .split(',')
+    .map((c) => c.trim().toUpperCase())
+    .filter((c) => c.length === 2),
+
+  // If true, requests without detectable country are rejected when geo-fencing is active
+  geoRequireCountry: process.env.GEO_REQUIRE_COUNTRY === 'true',
 } as const;

@@ -13,11 +13,12 @@ model Tenant {
   name       String
   apiKey     String    @unique @map("api_key")
   apiSecret  String    @map("api_secret")
-  isActive   Boolean   @default(true) @map("is_active")
-  webhookUrl String?   @map("webhook_url")
-  createdAt  DateTime  @default(now()) @map("created_at")
-  updatedAt  DateTime  @updatedAt @map("updated_at")
-  projects   Project[]
+  isActive         Boolean   @default(true) @map("is_active")
+  webhookUrl       String?   @map("webhook_url")
+  bannedCountries  String[]  @default([]) @map("banned_countries")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  projects         Project[]
 
   @@map("tenants")
 }
@@ -80,6 +81,7 @@ model RedeemedCode {
   redemptionCount Int      @default(1) @map("redemption_count")
   redeemedAt      DateTime @default(now()) @map("redeemed_at")
   ipAddress       String?  @map("ip_address")
+  detectedCountry String?  @map("detected_country") @db.VarChar(2)
   metadata        Json?
   createdAt       DateTime @default(now()) @map("created_at")
 

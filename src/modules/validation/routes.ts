@@ -74,6 +74,9 @@ export async function validationRoutes(app: FastifyInstance): Promise<void> {
     if (result.sandbox) {
       response.sandbox = true;
     }
+    if (result.detectedCountry) {
+      response.detected_country = result.detectedCountry;
+    }
 
     return reply.status(200).send(response);
   });

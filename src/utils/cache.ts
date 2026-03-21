@@ -1,4 +1,4 @@
-import type { CodeRule, Project } from '@prisma/client';
+import type { CodeRule, Project, Tenant } from '@prisma/client';
 import { getRedis } from './redis.js';
 import { prisma } from './prisma.js';
 import { logger } from './logger.js';
@@ -6,7 +6,7 @@ import { logger } from './logger.js';
 const CACHE_TTL = 300; // 5 minutes
 const PROJECT_KEY_PREFIX = 'omnicodex:project:';
 
-type ProjectWithRules = Project & { codeRules: CodeRule[] };
+type ProjectWithRules = Project & { codeRules: CodeRule[]; tenant: Tenant };
 
 export async function getCachedProjectWithRules(
   projectId: string,
@@ -36,7 +36,7 @@ export async function getCachedProjectWithRules(
   // Cache miss — load from DB
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    include: { codeRules: { where: { isActive: true } } },
+    include: { codeRules: { where: { isActive: true } }, tenant: true },
   });
 
   if (project) {

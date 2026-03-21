@@ -1,4 +1,4 @@
-import type { CodeRule, Project } from '@prisma/client';
+import type { CodeRule, Project, Tenant } from '@prisma/client';
 import type { ValidationResult, PipelineContext } from '../../types/validation.js';
 import type { StructureDefinition, CheckSegment } from '../../types/structure-def.js';
 import { normalize } from './normalizer.js';
@@ -45,7 +45,7 @@ export async function runPipeline(input: ValidateInput): Promise<ValidationResul
 }
 
 async function executePipeline(input: ValidateInput): Promise<ValidationResult> {
-  // Load project with its code rules (cached in Redis, TTL 5 min)
+  // Load project with its code rules and tenant (cached in Redis, TTL 5 min)
   const project = await getCachedProjectWithRules(input.projectId);
 
   if (!project) {
@@ -58,7 +58,7 @@ async function executePipeline(input: ValidateInput): Promise<ValidationResult> 
 
   // Try each active code rule until one matches
   for (const codeRule of project.codeRules) {
-    const result = await tryRule(input, project, codeRule);
+    const result = await tryRule(input, project, project.tenant, codeRule);
     if (result) return result;
   }
 
@@ -72,6 +72,7 @@ async function executePipeline(input: ValidateInput): Promise<ValidationResult> 
 async function tryRule(
   input: ValidateInput,
   project: Project,
+  tenant: Tenant,
   codeRule: CodeRule,
 ): Promise<ValidationResult | null> {
   // Phase 1: Normalize
@@ -120,9 +121,16 @@ async function tryRule(
   const vigencyError = validateVigency(project, codeRule);
   if (vigencyError) return vigencyError;
 
-  // Phase 5b: Geo-fencing
-  const geoError = validateGeoFencing(codeRule, input.country);
-  if (geoError) return geoError;
+  // Phase 5b: Geo-fencing (3-tier: global → tenant → rule)
+  const geoResult = validateGeoFencing({
+    codeRule,
+    tenant,
+    ipAddress: input.ipAddress,
+    clientCountry: input.country,
+  });
+  if (geoResult.error) return geoResult.error;
+
+  const detectedCountry = geoResult.detectedCountry;
 
   // Sandbox mode — simulate phase 6 without persisting
   if (input.sandbox) {
@@ -137,6 +145,7 @@ async function tryRule(
       redeemedAt: new Date().toISOString(),
       redemptionId: `sandbox-${randomUUID().slice(0, 8)}`,
       sandbox: true,
+      detectedCountry,
     };
   }
 
@@ -149,6 +158,7 @@ async function tryRule(
       input.owTransactionId,
       input.ipAddress,
       input.metadata,
+      detectedCountry,
     );
 
     if (uniquenessResult.error) return uniquenessResult.error;
@@ -163,6 +173,7 @@ async function tryRule(
       campaignInfo: codeRule.campaignInfo,
       redeemedAt: uniquenessResult.redeemedAt!.toISOString(),
       redemptionId: uniquenessResult.redemptionId!,
+      detectedCountry,
     };
   }
 
@@ -177,5 +188,6 @@ async function tryRule(
     campaignInfo: codeRule.campaignInfo,
     redeemedAt: new Date().toISOString(),
     redemptionId: 'dry-run',
+    detectedCountry,
   };
 }

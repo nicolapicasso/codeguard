@@ -25,6 +25,7 @@ export interface ValidationSuccess {
   redeemedAt: string;
   redemptionId: string;
   sandbox?: boolean;
+  detectedCountry?: string | null;
 }
 
 export interface ValidationFailure {

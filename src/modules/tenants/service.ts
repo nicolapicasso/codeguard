@@ -5,6 +5,7 @@ export async function createTenant(data: {
   owTenantId: string;
   name: string;
   webhookUrl?: string;
+  bannedCountries?: string[];
 }) {
   const apiKey = generateApiKey();
   const apiSecret = generateApiSecret();
@@ -16,6 +17,7 @@ export async function createTenant(data: {
       apiKey,
       apiSecret,
       webhookUrl: data.webhookUrl,
+      bannedCountries: data.bannedCountries || [],
     },
   });
 }
@@ -29,6 +31,7 @@ export async function listTenants() {
       name: true,
       isActive: true,
       webhookUrl: true,
+      bannedCountries: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -46,6 +49,7 @@ export async function updateTenant(id: string, data: {
   name?: string;
   isActive?: boolean;
   webhookUrl?: string;
+  bannedCountries?: string[];
 }) {
   return prisma.tenant.update({ where: { id }, data });
 }

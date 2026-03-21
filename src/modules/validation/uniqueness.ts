@@ -22,6 +22,7 @@ export async function validateUniqueness(
   owTransactionId?: string,
   ipAddress?: string,
   metadata?: Record<string, unknown>,
+  detectedCountry?: string | null,
 ): Promise<UniquenessResult> {
   const codeHash = sha256(normalizedCode);
   const lockKey = `omnicodex:lock:${codeRule.id}:${codeHash}`;
@@ -83,6 +84,7 @@ export async function validateUniqueness(
         owUserId,
         owTransactionId,
         ipAddress,
+        detectedCountry: detectedCountry || null,
         metadata: metadata as Prisma.InputJsonValue | undefined,
       },
     });
