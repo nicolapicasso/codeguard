@@ -33,3 +33,38 @@ export function generateApiKey(): string {
 export function generateApiSecret(): string {
   return randomBytes(32).toString('hex');
 }
+
+/**
+ * Encode a hex string as BASE32 (RFC 4648, uppercase, no padding).
+ *
+ * Used for HMAC TAG segments: the fabricant generates HMAC-SHA256,
+ * then encodes the result as BASE32 before truncating to segment length.
+ * BASE32 uses A-Z and 2-7, which avoids ambiguous characters (0/O, 1/I/L)
+ * and is case-insensitive — ideal for printed codes.
+ */
+const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+
+export function hexToBase32(hex: string): string {
+  const bytes = Buffer.from(hex, 'hex');
+  let bits = '';
+  for (const byte of bytes) {
+    bits += byte.toString(2).padStart(8, '0');
+  }
+
+  let result = '';
+  for (let i = 0; i + 5 <= bits.length; i += 5) {
+    const chunk = parseInt(bits.substring(i, i + 5), 2);
+    result += BASE32_ALPHABET[chunk];
+  }
+
+  return result;
+}
+
+/**
+ * Compute HMAC-SHA256 and return result as BASE32 (truncated to given length).
+ */
+export function hmacSha256Base32(data: string, secret: string, truncateLength?: number): string {
+  const fullHmac = hmacSha256(data, secret);
+  const base32 = hexToBase32(fullHmac);
+  return truncateLength ? base32.substring(0, truncateLength) : base32;
+}
