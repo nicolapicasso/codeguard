@@ -31,13 +31,40 @@ Esto provisiona automáticamente:
 
 En el panel de Digital Ocean → Apps → codeguard → Settings → Environment Variables:
 
-1. Genera un JWT secret seguro:
+1. Genera secretos seguros:
    ```bash
+   # JWT_SECRET
    openssl rand -base64 48
-   ```
-2. Reemplaza `JWT_SECRET` con el valor generado
 
-### 3. Primera migración y seed
+   # CODE_HASH_PEPPER
+   openssl rand -hex 32
+   ```
+2. Reemplaza `JWT_SECRET` y `CODE_HASH_PEPPER` con los valores generados
+3. Configura las variables de seguridad adicionales:
+   - `CORS_ORIGIN` — origen CORS permitido (ej: `https://admin.omnicodex.com`)
+   - `GLOBAL_BANNED_COUNTRIES` — códigos ISO alpha-2 separados por coma (ej: `KP,IR,CU,SY`)
+   - `GEO_REQUIRE_COUNTRY` — `true` para rechazar requests sin país determinado
+
+### 3. Crear el primer usuario admin
+
+El setup de admin se realiza en dos pasos:
+
+1. **Primer arranque** — crear el usuario admin inicial:
+   ```bash
+   curl -X POST https://tu-app.ondigitalocean.app/api/admin/auth/setup \
+     -H "Content-Type: application/json" \
+     -d '{"username": "admin", "password": "TU_PASSWORD_SEGURO", "setup_secret": "<JWT_SECRET>"}'
+   ```
+2. **Login** — obtener token JWT:
+   ```bash
+   curl -X POST https://tu-app.ondigitalocean.app/api/admin/auth/login \
+     -H "Content-Type: application/json" \
+     -d '{"username": "admin", "password": "TU_PASSWORD_SEGURO"}'
+   ```
+
+> **Nota:** `JWT_SECRET` nunca se expone al navegador. Solo se usa como clave de firma en el servidor y como `setup_secret` para el bootstrap inicial.
+
+### 4. Primera migración y seed
 
 El `docker-entrypoint.sh` ejecuta `prisma migrate deploy` automáticamente en cada despliegue.
 
@@ -46,7 +73,7 @@ Para el seed inicial (datos demo), activa temporalmente:
 - Haz un re-deploy
 - Vuelve a poner `SEED_ON_DEPLOY=false`
 
-### 4. Deploys automáticos
+### 5. Deploys automáticos
 
 Cada push a `main` dispara un re-deploy automático (configurado en `app.yaml`).
 
@@ -78,7 +105,7 @@ cd codeguard
 # Configurar variables de entorno
 cp .env.production .env.production.local
 nano .env.production.local
-# → Edita DATABASE_URL, REDIS_URL, JWT_SECRET
+# → Edita DATABASE_URL, REDIS_URL, JWT_SECRET, CODE_HASH_PEPPER, CORS_ORIGIN
 ```
 
 ### 3. Levantar los servicios
@@ -147,8 +174,12 @@ docker compose -f docker-compose.prod.yml up -d --build
 ## Health Checks
 
 - `GET /health` — Estado general
-- `GET /health/ready` — Base de datos + Redis listos
+- `GET /health/ready` — Devuelve `{"status": "ready"}` (no expone detalles de componentes internos)
 - `GET /health/live` — Proceso vivo
+
+## Swagger / Documentación API
+
+El endpoint `/docs` (Swagger UI) **no está disponible** cuando `NODE_ENV=production`. Solo funciona en entornos de desarrollo.
 
 ## Monitoreo
 
