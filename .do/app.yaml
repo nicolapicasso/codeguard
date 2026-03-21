@@ -4,15 +4,15 @@
 # Deploy: doctl apps create --spec .do/app.yaml
 # Update: doctl apps update <app-id> --spec .do/app.yaml
 
-name: codeguard
+name: omnicodex
 
-region: nyc
+region: fra
 
 services:
   # ── Backend API ──────────────────────────────────────────
   - name: api
     github:
-      repo: nicolapicasso/codeguard       # ← change to your repo
+      repo: nicolapicasso/codeguard
       branch: main
       deploy_on_push: true
     dockerfile_path: Dockerfile
@@ -42,6 +42,9 @@ services:
       - key: JWT_SECRET
         type: SECRET
         value: CHANGE_ME_GENERATE_A_SECURE_SECRET
+      - key: CODE_HASH_PEPPER
+        type: SECRET
+        value: CHANGE_ME_GENERATE_A_SECURE_PEPPER
       - key: HMAC_TOLERANCE_SECONDS
         value: "300"
       - key: RATE_LIMIT_PER_USER_PER_MINUTE
@@ -54,18 +57,26 @@ services:
         value: info
       - key: SEED_ON_DEPLOY
         value: "false"
+      - key: GEO_REQUIRE_COUNTRY
+        value: "false"
+      - key: GLOBAL_BANNED_COUNTRIES
+        value: ""
+      - key: CORS_ORIGIN
+        value: "${APP_URL}"
     routes:
       - path: /api
       - path: /health
       - path: /docs
+      - path: /metrics
 
-  # ── Admin UI (static site) ──────────────────────────────
+  # ── Admin UI ───────────────────────────────────────────
   - name: admin-ui
     github:
-      repo: nicolapicasso/codeguard       # ← change to your repo
+      repo: nicolapicasso/codeguard
       branch: main
       deploy_on_push: true
-    dockerfile_path: admin-ui/Dockerfile
+    source_dir: admin-ui
+    dockerfile_path: Dockerfile
     instance_count: 1
     instance_size_slug: basic-xxs
     http_port: 80
