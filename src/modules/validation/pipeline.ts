@@ -11,6 +11,7 @@ import { validateGeoFencing } from './geo-fencing.js';
 import { getCachedProjectWithRules } from '../../utils/cache.js';
 import { metrics } from '../../utils/metrics.js';
 import { randomUUID } from 'crypto';
+import { assessSecurity } from '../code-rules/security-linter.js';
 
 export interface ValidateInput {
   code: string;
@@ -146,6 +147,40 @@ async function tryRule(
 
   const detectedCountry = geoResult.detectedCountry;
 
+  // Calculate security level for the matched rule
+  const secAssessment = assessSecurity({
+    totalLength: codeRule.totalLength,
+    charset: codeRule.charset,
+    hasCheckDigit: codeRule.hasCheckDigit,
+    structureDef: codeRule.structureDef as any,
+    fabricantSecret: (codeRule as any).fabricantSecret,
+  });
+
+  // PROTECTED level (3) — enhanced anti-fraud controls:
+  // Require ow_user_id and country for full traceability
+  if (secAssessment.security_level === 3 && !input.dryRun && !input.sandbox) {
+    if (!input.owUserId) {
+      return {
+        status: 'KO',
+        errorCode: 'INVALID_CODE',
+        errorMessage: 'PROTECTED level rule requires ow_user_id for anti-fraud traceability',
+      };
+    }
+    if (!detectedCountry && !input.country) {
+      return {
+        status: 'KO',
+        errorCode: 'GEO_BLOCKED',
+        errorMessage: 'PROTECTED level rule requires country identification',
+      };
+    }
+  }
+
+  const securityFields = {
+    securityLevel: secAssessment.security_level,
+    securityLevelName: secAssessment.security_level_name,
+    isProductionSafe: secAssessment.is_production_safe,
+  };
+
   // Sandbox mode — simulate phase 6 without persisting
   if (input.sandbox) {
     return {
@@ -160,6 +195,7 @@ async function tryRule(
       redemptionId: `sandbox-${randomUUID().slice(0, 8)}`,
       sandbox: true,
       detectedCountry,
+      ...securityFields,
     };
   }
 
@@ -189,6 +225,7 @@ async function tryRule(
       redeemedAt: uniquenessResult.redeemedAt!.toISOString(),
       redemptionId: uniquenessResult.redemptionId!,
       detectedCountry,
+      ...securityFields,
     };
   }
 
@@ -204,5 +241,6 @@ async function tryRule(
     redeemedAt: new Date().toISOString(),
     redemptionId: 'dry-run',
     detectedCountry,
+    ...securityFields,
   };
 }

@@ -68,6 +68,10 @@ export async function validationRoutes(app: FastifyInstance): Promise<void> {
       redemption_id: result.redemptionId,
       redeemed_at: result.redeemedAt,
       points_value: result.pointsValue,
+      // Security level exposed so OmniWallet can make policy decisions
+      security_level: result.securityLevel,
+      security_level_name: result.securityLevelName,
+      is_production_safe: result.isProductionSafe,
     };
     if (result.sandbox) {
       response.sandbox = true;

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader } from '../components/Card';
-import { Plus, Trash2, GripVertical, Code } from 'lucide-react';
+import { Plus, Trash2, GripVertical, Code, Shield, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { codeRules as rulesApi } from '../lib/api';
 
 interface Segment {
@@ -37,6 +37,52 @@ const ALLOWED_SEGMENTS: Record<string, string[]> = {
 
 const CUSTOM_FUNCTION_TEMPLATE = `{"type": "weighted_sum", "weights": [3, 1, 3, 1], "mod": 10, "complement": true}`;
 
+/** Client-side security level estimation (mirrors backend assessSecurity) */
+function estimateSecurityLevel(segments: Segment[], hasCheckDigit: boolean, fabricantSecret: string): {
+  level: 0 | 1 | 2 | 3;
+  name: string;
+  color: 'red' | 'yellow' | 'green';
+  isProductionSafe: boolean;
+  entropy: number;
+} {
+  const hasHmac = segments.some((s) => s.type === 'hmac');
+  const hmacSeg = segments.find((s) => s.type === 'hmac');
+
+  // Estimate entropy
+  let entropy = 0;
+  for (const seg of segments) {
+    switch (seg.type) {
+      case 'numeric': entropy += seg.length * 3.32; break;
+      case 'alpha': entropy += seg.length * 4.7; break;
+      case 'alphanumeric': entropy += seg.length * 5.17; break;
+      case 'enum': entropy += seg.values ? Math.log2(seg.values.length || 1) : 0; break;
+      case 'date': entropy += 12; break;
+    }
+  }
+  entropy = Math.floor(entropy);
+
+  // Level 3 — PROTECTED
+  if (hasHmac && fabricantSecret && hmacSeg && hmacSeg.length >= 8 && hasCheckDigit && entropy >= 40) {
+    return { level: 3, name: 'PROTECTED', color: 'green', isProductionSafe: true, entropy };
+  }
+  // Level 2 — AUTHENTICATED
+  if (hasHmac && fabricantSecret) {
+    return { level: 2, name: 'AUTHENTICATED', color: 'yellow', isProductionSafe: entropy >= 30, entropy };
+  }
+  // Level 1 — CONTROLLED
+  if (hasCheckDigit || entropy >= 30) {
+    return { level: 1, name: 'CONTROLLED', color: 'yellow', isProductionSafe: false, entropy };
+  }
+  // Level 0 — OPEN
+  return { level: 0, name: 'OPEN', color: 'red', isProductionSafe: false, entropy };
+}
+
+const LEVEL_STYLES = {
+  red: { bg: 'bg-red-100', border: 'border-red-300', text: 'text-red-800', badge: 'bg-red-600' },
+  yellow: { bg: 'bg-amber-50', border: 'border-amber-300', text: 'text-amber-800', badge: 'bg-amber-500' },
+  green: { bg: 'bg-green-50', border: 'border-green-300', text: 'text-green-800', badge: 'bg-green-600' },
+} as const;
+
 export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps) {
   const [form, setForm] = useState({
     name: '',
@@ -65,6 +111,11 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
   const defaultSegType = allowedTypes.includes('alphanumeric') ? 'alphanumeric' : allowedTypes[0];
 
   const totalLength = segments.reduce((sum, s) => sum + s.length, 0);
+
+  const secLevel = useMemo(
+    () => estimateSecurityLevel(segments, form.has_check_digit, fabricantSecret),
+    [segments, form.has_check_digit, fabricantSecret],
+  );
 
   const handleCharsetChange = (newCharset: string) => {
     const newAllowed = ALLOWED_SEGMENTS[newCharset] || SEGMENT_TYPES;
@@ -290,6 +341,42 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
               placeholder="ES, MX, AR, CO (vacio = sin restriccion)"
             />
             <p className="text-xs text-gray-400 mt-1">Dejar vacio para permitir todos los paises</p>
+          </div>
+
+          {/* Security Level Indicator */}
+          <div className={`${LEVEL_STYLES[secLevel.color].bg} border ${LEVEL_STYLES[secLevel.color].border} rounded-lg p-4`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {secLevel.color === 'green' ? (
+                  <ShieldCheck className={`w-6 h-6 ${LEVEL_STYLES[secLevel.color].text}`} />
+                ) : secLevel.color === 'red' ? (
+                  <ShieldAlert className={`w-6 h-6 ${LEVEL_STYLES[secLevel.color].text}`} />
+                ) : (
+                  <Shield className={`w-6 h-6 ${LEVEL_STYLES[secLevel.color].text}`} />
+                )}
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold text-white ${LEVEL_STYLES[secLevel.color].badge}`}>
+                      Nivel {secLevel.level} — {secLevel.name}
+                    </span>
+                    {secLevel.isProductionSafe ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        Apto para produccion
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                        No apto para produccion
+                      </span>
+                    )}
+                  </div>
+                  <p className={`text-xs mt-1 ${LEVEL_STYLES[secLevel.color].text}`}>
+                    Entropia estimada: ~{secLevel.entropy} bits
+                    {secLevel.level < 2 && ' — Agrega un segmento HMAC con secreto del fabricante para subir al nivel AUTHENTICATED'}
+                    {secLevel.level === 2 && ' — Para nivel PROTECTED: HMAC >= 8 chars + digito de control + entropia >= 40 bits'}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Segments builder */}

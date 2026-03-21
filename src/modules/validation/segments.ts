@@ -1,6 +1,6 @@
 import type { ValidationFailure } from '../../types/validation.js';
 import type { StructureDefinition, Segment, HmacSegment } from '../../types/structure-def.js';
-import { hmacSha256 } from '../../utils/crypto.js';
+import { hmacSha256, hmacSha256Base32 } from '../../utils/crypto.js';
 
 /**
  * Phase 3 — Segment Validation
@@ -56,11 +56,15 @@ export function validateSegments(
 }
 
 /**
- * Validate HMAC authenticator segment.
+ * Validate HMAC authenticator segment (TAG).
  *
  * The fabricant generates: HMAC-SHA256(payload_segments_joined, fabricantSecret)
- * Then truncates to the segment length and encodes as uppercase hex.
- * OmniCodex verifies by recomputing and comparing.
+ * Then encodes as BASE32 (RFC 4648) and truncates to the segment length.
+ * BASE32 uses A-Z and 2-7 — avoids ambiguous characters (0/O, 1/I/L),
+ * is case-insensitive, and works well for printed codes.
+ *
+ * For backward compatibility, if BASE32 match fails, falls back to
+ * uppercase HEX comparison (legacy encoding).
  */
 function validateHmacSegment(
   parsedSegments: Map<string, string>,
@@ -80,21 +84,26 @@ function validateHmacSegment(
     .map((name) => parsedSegments.get(name) || '')
     .join('');
 
-  // Compute expected HMAC and truncate to segment length
-  const fullHmac = hmacSha256(dataPayload, fabricantSecret).toUpperCase();
-  const expectedTruncated = fullHmac.substring(0, segment.length);
-
   const actualValue = (parsedSegments.get(segment.name) || '').toUpperCase();
 
-  if (actualValue !== expectedTruncated) {
-    return {
-      status: 'KO',
-      errorCode: 'INVALID_CODE',
-      errorMessage: 'Code authenticity verification failed',
-    };
+  // Primary: BASE32 encoding (new standard)
+  const base32Tag = hmacSha256Base32(dataPayload, fabricantSecret, segment.length);
+  if (actualValue === base32Tag) {
+    return null;
   }
 
-  return null;
+  // Fallback: legacy HEX encoding (backward compatibility)
+  const fullHmacHex = hmacSha256(dataPayload, fabricantSecret).toUpperCase();
+  const hexTag = fullHmacHex.substring(0, segment.length);
+  if (actualValue === hexTag) {
+    return null;
+  }
+
+  return {
+    status: 'KO',
+    errorCode: 'INVALID_CODE',
+    errorMessage: 'Code authenticity verification failed',
+  };
 }
 
 function validateSingleSegment(

@@ -1,23 +1,119 @@
 /**
  * Security linter for CodeRule configurations.
  *
- * Prevents operators from creating rules with dangerously low entropy,
- * weak structures, or configurations that would be easy to brute-force.
- * Returns an array of warning/error messages.
+ * Calculates a Security Level (0-3) for each rule and determines
+ * whether it is safe for production use. Also returns warnings/errors
+ * for weak configurations.
+ *
+ * Security Levels:
+ *   0 — OPEN:          No integrity checks, no authentication
+ *   1 — CONTROLLED:    Has check digit OR entropy >= 30, but no HMAC
+ *   2 — AUTHENTICATED: Has HMAC authenticator with fabricant secret
+ *   3 — PROTECTED:     HMAC >= 8 chars + check digit + entropy >= 40 bits
  */
+
+export type SecurityLevel = 0 | 1 | 2 | 3;
+
+export const SECURITY_LEVEL_NAMES: Record<SecurityLevel, string> = {
+  0: 'OPEN',
+  1: 'CONTROLLED',
+  2: 'AUTHENTICATED',
+  3: 'PROTECTED',
+};
+
+export const SECURITY_LEVEL_COLORS: Record<SecurityLevel, 'red' | 'yellow' | 'green'> = {
+  0: 'red',
+  1: 'yellow',
+  2: 'yellow',
+  3: 'green',
+};
 
 export interface LintResult {
   level: 'error' | 'warning';
   message: string;
 }
 
-export function lintCodeRule(data: {
+export interface SecurityAssessment {
+  security_level: SecurityLevel;
+  security_level_name: string;
+  security_level_color: 'red' | 'yellow' | 'green';
+  is_production_safe: boolean;
+  entropy_bits: number;
+  lint_results: LintResult[];
+  lint_errors: string[];
+  lint_warnings: string[];
+}
+
+export interface LintInput {
   totalLength: number;
   charset: string;
   hasCheckDigit: boolean;
   structureDef: { segments?: Array<{ type: string; length: number; values?: string[]; value?: string }> };
   fabricantSecret?: string | null;
-}): LintResult[] {
+}
+
+/**
+ * Full security assessment: calculates level, is_production_safe, and lint results.
+ */
+export function assessSecurity(data: LintInput): SecurityAssessment {
+  const lintResults = lintCodeRule(data);
+  const entropy = estimateEntropy(data);
+  const securityLevel = calculateSecurityLevel(data, entropy);
+
+  const lintErrors = lintResults.filter((r) => r.level === 'error').map((e) => e.message);
+  const lintWarnings = lintResults.filter((r) => r.level === 'warning').map((w) => w.message);
+
+  // is_production_safe: level >= 2 (has HMAC) AND no lint errors AND entropy >= 30
+  const isProductionSafe = securityLevel >= 2 && lintErrors.length === 0 && entropy >= 30;
+
+  return {
+    security_level: securityLevel,
+    security_level_name: SECURITY_LEVEL_NAMES[securityLevel],
+    security_level_color: SECURITY_LEVEL_COLORS[securityLevel],
+    is_production_safe: isProductionSafe,
+    entropy_bits: entropy,
+    lint_results: lintResults,
+    lint_errors: lintErrors,
+    lint_warnings: lintWarnings,
+  };
+}
+
+/**
+ * Calculate the Security Level (0-3) based on rule configuration.
+ */
+export function calculateSecurityLevel(data: LintInput, entropy?: number): SecurityLevel {
+  const segments = data.structureDef?.segments || [];
+  const hasHmac = segments.some((s) => s.type === 'hmac');
+  const hmacSegment = segments.find((s) => s.type === 'hmac');
+  const effectiveEntropy = entropy ?? estimateEntropy(data);
+
+  // Level 3 — PROTECTED: HMAC >= 8 chars + check digit + entropy >= 40
+  if (
+    hasHmac &&
+    data.fabricantSecret &&
+    hmacSegment &&
+    hmacSegment.length >= 8 &&
+    data.hasCheckDigit &&
+    effectiveEntropy >= 40
+  ) {
+    return 3;
+  }
+
+  // Level 2 — AUTHENTICATED: Has HMAC with fabricant secret
+  if (hasHmac && data.fabricantSecret) {
+    return 2;
+  }
+
+  // Level 1 — CONTROLLED: Has check digit OR entropy >= 30
+  if (data.hasCheckDigit || effectiveEntropy >= 30) {
+    return 1;
+  }
+
+  // Level 0 — OPEN
+  return 0;
+}
+
+export function lintCodeRule(data: LintInput): LintResult[] {
   const results: LintResult[] = [];
 
   // 1. Minimum total length
@@ -78,12 +174,12 @@ export function lintCodeRule(data: {
     });
   }
 
-  // 7. HMAC segment too short
+  // 7. HMAC segment too short (< 8 chars for BASE32 encoding)
   const hmacSegment = segments.find((s) => s.type === 'hmac');
-  if (hmacSegment && hmacSegment.length < 6) {
+  if (hmacSegment && hmacSegment.length < 8) {
     results.push({
       level: 'warning',
-      message: `HMAC authenticator segment is only ${hmacSegment.length} chars. Recommended: at least 6 for adequate security.`,
+      message: `HMAC authenticator segment is only ${hmacSegment.length} chars. Recommended: at least 8 for adequate security with BASE32 encoding.`,
     });
   }
 
@@ -93,7 +189,7 @@ export function lintCodeRule(data: {
 /**
  * Estimate effective entropy bits based on segment types and lengths.
  */
-function estimateEntropy(data: {
+export function estimateEntropy(data: {
   charset: string;
   structureDef: { segments?: Array<{ type: string; length: number; values?: string[] }> };
 }): number {
