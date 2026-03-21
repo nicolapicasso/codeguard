@@ -76,7 +76,7 @@ services:
       branch: main
       deploy_on_push: true
     source_dir: admin-ui
-    dockerfile_path: Dockerfile
+    dockerfile_path: admin-ui/Dockerfile
     instance_count: 1
     instance_size_slug: basic-xxs
     http_port: 80
