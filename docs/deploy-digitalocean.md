@@ -98,7 +98,8 @@ REDIS_URL=redis://redis:6379
 
 # Auth — CAMBIAR ESTOS VALORES
 JWT_SECRET=genera-un-secreto-largo-y-aleatorio-aqui
-HMAC_TOLERANCE_SECONDS=300
+CODE_HASH_PEPPER=genera-un-pepper-largo-y-aleatorio-aqui
+HMAC_TOLERANCE_SECONDS=60
 
 # Rate limiting
 RATE_LIMIT_PER_USER_PER_MINUTE=30
@@ -106,7 +107,11 @@ RATE_LIMIT_PER_IP_PER_MINUTE=100
 
 # Security
 STORE_PLAIN_CODES=false
-CUSTOM_FUNCTION_TIMEOUT_MS=100
+CORS_ORIGIN=https://admin.omnicodex.com
+
+# Geo-blocking
+GLOBAL_BANNED_COUNTRIES=KP,IR,CU,SY
+GEO_REQUIRE_COUNTRY=true
 EOF
 ```
 
@@ -114,6 +119,9 @@ EOF
 
 ```bash
 # Generar un JWT_SECRET aleatorio
+openssl rand -hex 32
+
+# Generar un CODE_HASH_PEPPER aleatorio
 openssl rand -hex 32
 
 # Generar password de PostgreSQL
@@ -219,7 +227,7 @@ curl http://localhost:3000/health
 # → {"status":"ok","timestamp":"..."}
 
 curl http://localhost:3000/health/ready
-# → {"status":"ready","postgres":"ok","redis":"ok"}
+# → {"status":"ready"}
 
 curl http://localhost:8080
 # → HTML del admin panel
@@ -227,9 +235,30 @@ curl http://localhost:8080
 
 ---
 
-## Paso 7 — Configurar Nginx como reverse proxy
+## Paso 7 — Crear el primer usuario admin
 
-### 7.1 — Sin dominio (acceso por IP)
+El setup de admin se realiza en dos pasos:
+
+1. **Primer arranque** — crear el usuario admin inicial:
+   ```bash
+   curl -X POST http://localhost:3000/api/admin/auth/setup \
+     -H "Content-Type: application/json" \
+     -d '{"username": "admin", "password": "TU_PASSWORD_SEGURO", "setup_secret": "<JWT_SECRET>"}'
+   ```
+2. **Login** — obtener token JWT:
+   ```bash
+   curl -X POST http://localhost:3000/api/admin/auth/login \
+     -H "Content-Type: application/json" \
+     -d '{"username": "admin", "password": "TU_PASSWORD_SEGURO"}'
+   ```
+
+> **Nota:** `JWT_SECRET` nunca se expone al navegador. Solo se usa como clave de firma en el servidor y como `setup_secret` para el bootstrap inicial.
+
+---
+
+## Paso 8 — Configurar Nginx como reverse proxy
+
+### 8.1 — Sin dominio (acceso por IP)
 
 ```bash
 cat > /etc/nginx/sites-available/omnicodex << 'NGINX'
@@ -255,8 +284,8 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # Health + Docs + Metrics
-    location ~ ^/(health|docs|metrics) {
+    # Health + Metrics
+    location ~ ^/(health|metrics) {
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host $host;
     }
@@ -274,10 +303,11 @@ nginx -t && systemctl reload nginx
 Ya puedes acceder:
 - **Admin Panel**: `http://TU_IP/`
 - **API**: `http://TU_IP/api/v1/validate`
-- **Swagger**: `http://TU_IP/docs`
 - **Health**: `http://TU_IP/health`
 
-### 7.2 — Con dominio + HTTPS (recomendado para producción)
+> **Nota:** El endpoint `/docs` (Swagger UI) no está disponible cuando `NODE_ENV=production`.
+
+### 8.2 — Con dominio + HTTPS (recomendado para producción)
 
 Si tienes un dominio (ej: `omnicodex.tudominio.com`):
 
@@ -307,11 +337,10 @@ Certbot configura HTTPS automáticamente y renueva el certificado cada 90 días.
 Resultado:
 - `https://omnicodex.tudominio.com/` → Admin Panel
 - `https://omnicodex.tudominio.com/api/v1/validate` → API
-- `https://omnicodex.tudominio.com/docs` → Swagger
 
 ---
 
-## Paso 8 — Firewall
+## Paso 9 — Firewall
 
 ```bash
 # Habilitar UFW
@@ -326,7 +355,7 @@ ufw status
 
 ---
 
-## Paso 9 — Mantenimiento
+## Paso 10 — Mantenimiento
 
 ### Ver logs
 ```bash
@@ -399,11 +428,12 @@ Si prefieres no gestionar servidor, puedes usar App Platform (PaaS):
 - [ ] Crear Droplet en DigitalOcean
 - [ ] Instalar Docker + Nginx
 - [ ] Subir código (git clone o rsync)
-- [ ] Configurar .env.production con secretos seguros
+- [ ] Configurar .env.production con secretos seguros (JWT_SECRET, CODE_HASH_PEPPER, CORS_ORIGIN)
 - [ ] docker compose up --build
 - [ ] Ejecutar migraciones Prisma
 - [ ] Configurar Nginx reverse proxy
 - [ ] (Opcional) Configurar dominio + SSL
 - [ ] Configurar firewall (UFW)
 - [ ] Verificar health checks
-- [ ] Acceder al Admin Panel y crear primer tenant
+- [ ] Crear primer usuario admin via `POST /api/admin/auth/setup`
+- [ ] Login con `POST /api/admin/auth/login` y crear primer tenant
