@@ -17,7 +17,7 @@ services:
       deploy_on_push: true
     dockerfile_path: Dockerfile
     instance_count: 1
-    instance_size_slug: basic-xxs          # $5/mo — scale up as needed
+    instance_size_slug: basic-xxs
     http_port: 3000
     health_check:
       http_path: /health/live
@@ -37,16 +37,18 @@ services:
         value: ${db.DATABASE_URL}
         scope: RUN_AND_BUILD_TIME
       - key: REDIS_URL
-        value: ${redis.REDIS_URL}
+        value: "PENDING"
         scope: RUN_TIME
       - key: JWT_SECRET
         type: SECRET
-        value: CHANGE_ME_GENERATE_A_SECURE_SECRET
+        value: "EP50hf55Iw4QmJBDqG8UW7HKdr/fV2Q6AXhuClm1Ds230q54acN+GKjgT2H1F8nh"
       - key: CODE_HASH_PEPPER
         type: SECRET
-        value: CHANGE_ME_GENERATE_A_SECURE_PEPPER
+        value: "06746ab913d8385c17f5e38885c5bd27d2102db1c79946c8937616f4ba9ebf80"
+      - key: CORS_ORIGIN
+        value: "https://omnicodex.com"
       - key: HMAC_TOLERANCE_SECONDS
-        value: "300"
+        value: "60"
       - key: RATE_LIMIT_PER_USER_PER_MINUTE
         value: "30"
       - key: RATE_LIMIT_PER_IP_PER_MINUTE
@@ -57,12 +59,10 @@ services:
         value: info
       - key: SEED_ON_DEPLOY
         value: "false"
-      - key: GEO_REQUIRE_COUNTRY
-        value: "false"
       - key: GLOBAL_BANNED_COUNTRIES
         value: ""
-      - key: CORS_ORIGIN
-        value: "${APP_URL}"
+      - key: GEO_REQUIRE_COUNTRY
+        value: "false"
     routes:
       - path: /api
       - path: /health
@@ -83,16 +83,10 @@ services:
     routes:
       - path: /
 
-# ── Managed Database ────────────────────────────────────────
+# ── Managed Databases ────────────────────────────────────────
 databases:
   - name: db
     engine: PG
     version: "16"
-    size: db-s-dev-database               # $7/mo dev database
-    num_nodes: 1
-
-  - name: redis
-    engine: REDIS
-    version: "7"
     size: db-s-dev-database
     num_nodes: 1
