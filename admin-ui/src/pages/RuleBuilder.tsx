@@ -23,22 +23,19 @@ interface RuleBuilderProps {
   onCancel: () => void;
 }
 
-const SEGMENT_TYPES = ['fixed', 'numeric', 'alpha', 'alphanumeric', 'check', 'date', 'enum'];
+const SEGMENT_TYPES = ['fixed', 'numeric', 'alpha', 'alphanumeric', 'check', 'date', 'enum', 'hmac'];
 const CHARSETS = ['NUMERIC', 'ALPHA_UPPER', 'ALPHA_LOWER', 'ALPHANUMERIC', 'CUSTOM'];
 const ALGORITHMS = ['LUHN', 'MOD10', 'MOD11', 'MOD97', 'VERHOEFF', 'DAMM', 'CUSTOM'];
 
 const ALLOWED_SEGMENTS: Record<string, string[]> = {
-  NUMERIC:      ['numeric', 'fixed', 'check', 'date'],
-  ALPHA_UPPER:  ['alpha', 'fixed', 'enum', 'check'],
-  ALPHA_LOWER:  ['alpha', 'fixed', 'enum', 'check'],
+  NUMERIC:      ['numeric', 'fixed', 'check', 'date', 'hmac'],
+  ALPHA_UPPER:  ['alpha', 'fixed', 'enum', 'check', 'hmac'],
+  ALPHA_LOWER:  ['alpha', 'fixed', 'enum', 'check', 'hmac'],
   ALPHANUMERIC: SEGMENT_TYPES,
   CUSTOM:       SEGMENT_TYPES,
 };
 
-const CUSTOM_FUNCTION_TEMPLATE = `// input: string con los dígitos del payload
-// Debe retornar el dígito de control calculado como string
-const sum = input.split('').reduce((a, c) => a + parseInt(c), 0);
-return String(sum % 10);`;
+const CUSTOM_FUNCTION_TEMPLATE = `{"type": "weighted_sum", "weights": [3, 1, 3, 1], "mod": 10, "complement": true}`;
 
 export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps) {
   const [form, setForm] = useState({
@@ -61,6 +58,7 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
   const [campaignInfo, setCampaignInfo] = useState('{}');
   const [customFunction, setCustomFunction] = useState(CUSTOM_FUNCTION_TEMPLATE);
   const [allowedCountries, setAllowedCountries] = useState('');
+  const [fabricantSecret, setFabricantSecret] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const allowedTypes = ALLOWED_SEGMENTS[form.charset] || SEGMENT_TYPES;
@@ -118,7 +116,10 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
           if (s.type === 'enum') seg.values = s.values || [];
           if (s.type === 'check') {
             seg.algorithm = s.algorithm || form.check_algorithm.toLowerCase();
-            seg.appliesTo = s.appliesTo || segments.filter((x) => x.type !== 'check').map((x) => x.name);
+            seg.appliesTo = s.appliesTo || segments.filter((x) => x.type !== 'check' && x.type !== 'hmac').map((x) => x.name);
+          }
+          if (s.type === 'hmac') {
+            seg.appliesTo = s.appliesTo || segments.filter((x) => x.type !== 'check' && x.type !== 'hmac').map((x) => x.name);
           }
           return seg;
         }),
@@ -146,6 +147,7 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
         product_info: parsedProduct,
         campaign_info: parsedCampaign,
         custom_check_function: form.check_algorithm === 'CUSTOM' ? customFunction : undefined,
+        fabricant_secret: fabricantSecret || undefined,
         allowed_countries: countries.length > 0 ? countries : undefined,
       });
 
@@ -235,24 +237,43 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
             </label>
           </div>
 
-          {/* Custom function editor */}
+          {/* Custom check digit DSL editor */}
           {form.has_check_digit && form.check_algorithm === 'CUSTOM' && (
             <div className="border border-amber-200 bg-amber-50 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-2">
                 <Code className="w-4 h-4 text-amber-600" />
-                <h3 className="text-sm font-medium text-amber-800">Custom Check Function (JavaScript)</h3>
+                <h3 className="text-sm font-medium text-amber-800">Custom Check Digit (DSL)</h3>
               </div>
               <p className="text-xs text-amber-600 mb-3">
-                La funcion recibe <code className="bg-amber-100 px-1 rounded">input</code> (string con los digitos del payload)
-                y debe retornar el digito de control como string. Se ejecuta en sandbox con timeout de 100ms.
+                Expresion JSON declarativa. Tipos soportados: <code className="bg-amber-100 px-1 rounded">weighted_sum</code>,{' '}
+                <code className="bg-amber-100 px-1 rounded">xor</code>,{' '}
+                <code className="bg-amber-100 px-1 rounded">cross_sum</code>.
               </p>
               <textarea
                 value={customFunction}
                 onChange={(e) => setCustomFunction(e.target.value)}
-                rows={6}
+                rows={4}
                 className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm font-mono bg-white focus:ring-2 focus:ring-amber-500 outline-none"
-                placeholder="// Tu funcion aqui..."
+                placeholder='{"type": "weighted_sum", "weights": [3,1], "mod": 10}'
                 spellCheck={false}
+              />
+            </div>
+          )}
+
+          {/* Fabricant secret (for HMAC authenticator segments) */}
+          {segments.some((s) => s.type === 'hmac') && (
+            <div className="border border-blue-200 bg-blue-50 rounded-lg p-4">
+              <h3 className="text-sm font-medium text-blue-800 mb-2">Secreto del fabricante (HMAC)</h3>
+              <p className="text-xs text-blue-600 mb-3">
+                Clave secreta compartida con el fabricante para verificar la autenticidad del codigo.
+                Solo el fabricante y OmniCodex conocen esta clave. Sin ella, nadie puede generar codigos validos.
+              </p>
+              <input
+                type="password"
+                value={fabricantSecret}
+                onChange={(e) => setFabricantSecret(e.target.value)}
+                className="w-full px-3 py-2 border border-blue-300 rounded-lg text-sm font-mono bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="Clave secreta del fabricante (min 32 caracteres recomendado)"
               />
             </div>
           )}

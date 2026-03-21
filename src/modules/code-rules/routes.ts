@@ -4,6 +4,7 @@ import { verifyJwt } from '../auth/jwt.js';
 import { createCodeRule, listCodeRules, getCodeRule, updateCodeRule, deleteCodeRule } from './service.js';
 import { runPipeline } from '../validation/pipeline.js';
 import { createCodeRuleSchema, updateCodeRuleSchema, testCodeSchema } from './schemas.js';
+import { lintCodeRule } from './security-linter.js';
 
 export async function codeRuleRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('onRequest', verifyJwt);
@@ -30,8 +31,28 @@ export async function codeRuleRoutes(app: FastifyInstance): Promise<void> {
       campaign_info?: Record<string, unknown>;
       points_value?: number;
       custom_check_function?: string;
+      fabricant_secret?: string;
       allowed_countries?: string[];
     };
+
+    // Security linter: check for weak configurations
+    const lintResults = lintCodeRule({
+      totalLength: body.total_length,
+      charset: body.charset,
+      hasCheckDigit: body.has_check_digit,
+      structureDef: body.structure_def as any,
+      fabricantSecret: body.fabricant_secret,
+    });
+
+    const lintErrors = lintResults.filter((r) => r.level === 'error');
+    if (lintErrors.length > 0) {
+      return reply.status(400).send({
+        status: 'KO',
+        error_code: 'INSECURE_RULE',
+        error_message: 'Rule configuration has security issues that must be resolved',
+        errors: lintErrors.map((e) => e.message),
+      });
+    }
 
     const rule = await createCodeRule(project_id, {
       name: body.name,
@@ -51,10 +72,17 @@ export async function codeRuleRoutes(app: FastifyInstance): Promise<void> {
       campaignInfo: body.campaign_info,
       pointsValue: body.points_value,
       customCheckFunction: body.custom_check_function,
+      fabricantSecret: body.fabricant_secret,
       allowedCountries: body.allowed_countries,
     });
 
-    return reply.status(201).send(rule);
+    const lintWarnings = lintResults.filter((r) => r.level === 'warning');
+    const response: any = { ...rule };
+    if (lintWarnings.length > 0) {
+      response.security_warnings = lintWarnings.map((w) => w.message);
+    }
+
+    return reply.status(201).send(response);
   });
 
   app.get('/api/admin/projects/:project_id/rules', async (request, reply) => {

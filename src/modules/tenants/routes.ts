@@ -9,11 +9,12 @@ export async function tenantRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/admin/tenants', {
     schema: { body: createTenantSchema },
   }, async (request, reply) => {
-    const body = request.body as { ow_tenant_id: string; name: string; webhook_url?: string };
+    const body = request.body as { ow_tenant_id: string; name: string; webhook_url?: string; banned_countries?: string[] };
     const tenant = await createTenant({
       owTenantId: body.ow_tenant_id,
       name: body.name,
       webhookUrl: body.webhook_url,
+      bannedCountries: body.banned_countries?.map((c) => c.toUpperCase()),
     });
     return reply.status(201).send(tenant);
   });
@@ -36,11 +37,12 @@ export async function tenantRoutes(app: FastifyInstance): Promise<void> {
     schema: { body: updateTenantSchema },
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const body = request.body as { name?: string; is_active?: boolean; webhook_url?: string };
+    const body = request.body as { name?: string; is_active?: boolean; webhook_url?: string; banned_countries?: string[] };
     const tenant = await updateTenant(id, {
       name: body.name,
       isActive: body.is_active,
       webhookUrl: body.webhook_url,
+      bannedCountries: body.banned_countries?.map((c) => c.toUpperCase()),
     });
     return reply.status(200).send(tenant);
   });

@@ -16,49 +16,56 @@ import { tenantRoutes } from './modules/tenants/routes.js';
 import { projectRoutes } from './modules/projects/routes.js';
 import { codeRuleRoutes } from './modules/code-rules/routes.js';
 import { auditRoutes } from './modules/audit/routes.js';
-import { generateToken } from './modules/auth/jwt.js';
+import { authenticateAdmin, hashPassword } from './modules/auth/jwt.js';
 import { registerMetricsHooks, registerMetricsRoute } from './utils/metrics.js';
 
 export async function buildApp() {
   const app = Fastify({
     logger: false, // We use our own pino instance
+    trustProxy: true, // Trust X-Forwarded-For from OmniWallet / reverse proxies
   });
 
   // Plugins
-  await app.register(cors, { origin: true });
+  // SECURITY: Restrict CORS to configured origins in production
+  const corsOrigin = config.nodeEnv === 'production'
+    ? (process.env.CORS_ORIGIN || 'https://admin.omnicodex.com')
+    : true;
+  await app.register(cors, { origin: corsOrigin });
   await app.register(helmet, { contentSecurityPolicy: false });
   await registerRateLimiter(app);
 
-  // OpenAPI / Swagger
-  await app.register(swagger, {
-    openapi: {
-      info: {
-        title: 'OmniCodex API',
-        description: 'Motor de Validación de Códigos Únicos — Middleware para OmniWallet',
-        version: '1.0.0',
-      },
-      servers: [{ url: `http://localhost:${config.port}` }],
-      components: {
-        securitySchemes: {
-          apiKey: {
-            type: 'apiKey',
-            in: 'header',
-            name: 'X-Api-Key',
-            description: 'API Key del tenant para Validation API',
-          },
-          bearerAuth: {
-            type: 'http',
-            scheme: 'bearer',
-            bearerFormat: 'JWT',
-            description: 'JWT token para Admin API',
+  // OpenAPI / Swagger — disabled in production for security
+  if (config.nodeEnv !== 'production') {
+    await app.register(swagger, {
+      openapi: {
+        info: {
+          title: 'OmniCodex API',
+          description: 'Motor de Validación de Códigos Únicos — Middleware para OmniWallet',
+          version: '1.0.0',
+        },
+        servers: [{ url: `http://localhost:${config.port}` }],
+        components: {
+          securitySchemes: {
+            apiKey: {
+              type: 'apiKey',
+              in: 'header',
+              name: 'X-Api-Key',
+              description: 'API Key del tenant para Validation API',
+            },
+            bearerAuth: {
+              type: 'http',
+              scheme: 'bearer',
+              bearerFormat: 'JWT',
+              description: 'JWT token para Admin API',
+            },
           },
         },
       },
-    },
-  });
-  await app.register(swaggerUi, {
-    routePrefix: '/docs',
-  });
+    });
+    await app.register(swaggerUi, {
+      routePrefix: '/docs',
+    });
+  }
 
   // Middleware
   app.addHook('onRequest', requestLogger);
@@ -76,33 +83,78 @@ export async function buildApp() {
       await prisma.$queryRaw`SELECT 1`;
       const redis = getRedis();
       await redis.ping();
-      return { status: 'ready', postgres: 'ok', redis: 'ok' };
-    } catch (err) {
-      return reply.status(503).send({
-        status: 'not_ready',
-        error: err instanceof Error ? err.message : 'Unknown error',
-      });
+      return { status: 'ready' };
+    } catch {
+      // SECURITY: Don't expose error details in production
+      return reply.status(503).send({ status: 'not_ready' });
     }
   });
 
   app.get('/health/live', async () => ({ status: 'live' }));
 
-  // Admin auth — JWT token generation (for development/admin panel login)
-  app.post('/api/admin/auth/token', {
+  // Admin auth — Login with username + password
+  app.post('/api/admin/auth/login', {
     schema: {
       body: {
         type: 'object',
-        required: ['secret'],
-        properties: { secret: { type: 'string' } },
+        required: ['username', 'password'],
+        properties: {
+          username: { type: 'string', minLength: 1 },
+          password: { type: 'string', minLength: 1 },
+        },
       },
     },
   }, async (request, reply) => {
-    const { secret } = request.body as { secret: string };
-    if (secret !== config.jwtSecret) {
-      return reply.status(401).send({ status: 'KO', error_code: 'AUTH_FAILED', error_message: 'Invalid admin secret' });
+    const { username, password } = request.body as { username: string; password: string };
+    const result = await authenticateAdmin(username, password);
+    if (!result) {
+      return reply.status(401).send({ status: 'KO', error_code: 'AUTH_FAILED', error_message: 'Invalid credentials' });
     }
-    const token = generateToken('admin');
-    return reply.status(200).send({ token, expires_in: '8h' });
+    return reply.status(200).send(result);
+  });
+
+  // Bootstrap: Create initial admin user if none exists (first-run only)
+  app.post('/api/admin/auth/setup', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['username', 'password', 'setup_secret'],
+        properties: {
+          username: { type: 'string', minLength: 3 },
+          password: { type: 'string', minLength: 8 },
+          setup_secret: { type: 'string' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const { username, password, setup_secret } = request.body as {
+      username: string; password: string; setup_secret: string;
+    };
+
+    // Only works if setup_secret matches JWT_SECRET (env var, never exposed to browser)
+    if (setup_secret !== config.jwtSecret) {
+      return reply.status(403).send({ status: 'KO', error_code: 'FORBIDDEN', error_message: 'Invalid setup secret' });
+    }
+
+    // Check if any admin users already exist
+    const existingCount = await prisma.adminUser.count();
+    if (existingCount > 0) {
+      return reply.status(409).send({ status: 'KO', error_code: 'ALREADY_SETUP', error_message: 'Admin users already exist. Use /api/admin/auth/login.' });
+    }
+
+    const user = await prisma.adminUser.create({
+      data: {
+        username,
+        passwordHash: hashPassword(password),
+        role: 'admin',
+      },
+    });
+
+    return reply.status(201).send({
+      status: 'OK',
+      message: 'Admin user created. Use /api/admin/auth/login to obtain a token.',
+      user: { id: user.id, username: user.username },
+    });
   });
 
   // Routes

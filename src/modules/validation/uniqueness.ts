@@ -1,6 +1,6 @@
 import type { CodeRule, Prisma } from '@prisma/client';
 import type { ValidationFailure } from '../../types/validation.js';
-import { sha256 } from '../../utils/crypto.js';
+import { codeHash as computeCodeHash } from '../../utils/crypto.js';
 import { prisma } from '../../utils/prisma.js';
 import { getRedlock } from '../../utils/redis.js';
 import { config } from '../../config/index.js';
@@ -22,8 +22,10 @@ export async function validateUniqueness(
   owTransactionId?: string,
   ipAddress?: string,
   metadata?: Record<string, unknown>,
+  detectedCountry?: string | null,
 ): Promise<UniquenessResult> {
-  const codeHash = sha256(normalizedCode);
+  // SECURITY: HMAC-keyed hash prevents rainbow table attacks on stored codes
+  const codeHash = computeCodeHash(normalizedCode, config.codeHashPepper);
   const lockKey = `omnicodex:lock:${codeRule.id}:${codeHash}`;
   const redlock = getRedlock();
 
@@ -83,6 +85,7 @@ export async function validateUniqueness(
         owUserId,
         owTransactionId,
         ipAddress,
+        detectedCountry: detectedCountry || null,
         metadata: metadata as Prisma.InputJsonValue | undefined,
       },
     });

@@ -46,6 +46,16 @@ export class ApiError extends Error {
   }
 }
 
+// --- Auth ---
+
+export const auth = {
+  login: (username: string, password: string) =>
+    request<{ token: string; expires_in: string; user: { id: string; username: string; role: string } }>(
+      '/api/admin/auth/login',
+      { method: 'POST', body: JSON.stringify({ username, password }) },
+    ),
+};
+
 // --- Tenants ---
 
 export const tenants = {

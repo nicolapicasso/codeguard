@@ -1,5 +1,6 @@
 import type { ValidationFailure } from '../../types/validation.js';
-import type { StructureDefinition, Segment } from '../../types/structure-def.js';
+import type { StructureDefinition, Segment, HmacSegment } from '../../types/structure-def.js';
+import { hmacSha256 } from '../../utils/crypto.js';
 
 /**
  * Phase 3 — Segment Validation
@@ -8,10 +9,12 @@ import type { StructureDefinition, Segment } from '../../types/structure-def.js'
 export function validateSegments(
   normalizedCode: string,
   structureDef: StructureDefinition,
+  fabricantSecret?: string | null,
 ): { error: ValidationFailure | null; parsedSegments: Map<string, string> } {
   const parsedSegments = new Map<string, string>();
   let offset = 0;
 
+  // First pass: parse all segments
   for (const segment of structureDef.segments) {
     if (offset + segment.length > normalizedCode.length) {
       return {
@@ -19,7 +22,6 @@ export function validateSegments(
           status: 'KO',
           errorCode: 'INVALID_SEGMENT',
           errorMessage: `Segment "${segment.name}" exceeds code length at offset ${offset}`,
-          details: { segment: segment.name, offset },
         },
         parsedSegments,
       };
@@ -28,15 +30,71 @@ export function validateSegments(
     const value = normalizedCode.substring(offset, offset + segment.length);
     parsedSegments.set(segment.name, value);
 
-    const segmentError = validateSingleSegment(value, segment);
-    if (segmentError) {
-      return { error: segmentError, parsedSegments };
+    // Skip HMAC segments in single-segment validation (validated below)
+    if (segment.type !== 'hmac') {
+      const segmentError = validateSingleSegment(value, segment);
+      if (segmentError) {
+        return { error: segmentError, parsedSegments };
+      }
     }
 
     offset += segment.length;
   }
 
+  // Second pass: validate HMAC authenticator segments
+  for (const segment of structureDef.segments) {
+    if (segment.type === 'hmac') {
+      const hmacSeg = segment as HmacSegment;
+      const hmacError = validateHmacSegment(parsedSegments, hmacSeg, fabricantSecret);
+      if (hmacError) {
+        return { error: hmacError, parsedSegments };
+      }
+    }
+  }
+
   return { error: null, parsedSegments };
+}
+
+/**
+ * Validate HMAC authenticator segment.
+ *
+ * The fabricant generates: HMAC-SHA256(payload_segments_joined, fabricantSecret)
+ * Then truncates to the segment length and encodes as uppercase hex.
+ * OmniCodex verifies by recomputing and comparing.
+ */
+function validateHmacSegment(
+  parsedSegments: Map<string, string>,
+  segment: HmacSegment,
+  fabricantSecret?: string | null,
+): ValidationFailure | null {
+  if (!fabricantSecret) {
+    return {
+      status: 'KO',
+      errorCode: 'INVALID_CODE',
+      errorMessage: 'Code rule requires HMAC authenticator but no fabricant secret is configured',
+    };
+  }
+
+  // Join the payload segments that the HMAC covers
+  const dataPayload = segment.appliesTo
+    .map((name) => parsedSegments.get(name) || '')
+    .join('');
+
+  // Compute expected HMAC and truncate to segment length
+  const fullHmac = hmacSha256(dataPayload, fabricantSecret).toUpperCase();
+  const expectedTruncated = fullHmac.substring(0, segment.length);
+
+  const actualValue = (parsedSegments.get(segment.name) || '').toUpperCase();
+
+  if (actualValue !== expectedTruncated) {
+    return {
+      status: 'KO',
+      errorCode: 'INVALID_CODE',
+      errorMessage: 'Code authenticity verification failed',
+    };
+  }
+
+  return null;
 }
 
 function validateSingleSegment(
