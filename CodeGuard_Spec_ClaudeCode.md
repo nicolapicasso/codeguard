@@ -1,10 +1,10 @@
 # OmniCodex — Especificación Técnica
 
-## Motor de Validación de Códigos Únicos · Middleware para OmniWallet
+## Motor de Validación y Generación de Códigos Únicos · Middleware para OmniWallet
 
-> **Versión del documento:** 2.0  
-> **Rama de referencia:** `main`  
-> **Archivo anterior:** `CodeGuard_Spec_ClaudeCode.md` (obsoleto, no usar)
+> **Versión del documento:** 3.0
+> **Rama de referencia:** `main`
+> **Cambios respecto a v2.0:** Incorpora modo de generación gestionada de códigos por lotes (secciones 4, 18–25)
 
 ---
 
@@ -13,34 +13,46 @@
 1. [Visión General](#1-visión-general)
 2. [Stack Tecnológico](#2-stack-tecnológico)
 3. [Modelo de Datos](#3-modelo-de-datos)
-4. [Definición de Estructura por Segmentos](#4-definición-de-estructura-por-segmentos)
-5. [Motor de Validación — Pipeline (7 fases)](#5-motor-de-validación--pipeline-7-fases)
-6. [Segmento HMAC — Autenticidad Criptográfica](#6-segmento-hmac--autenticidad-criptográfica)
-7. [Geo-fencing — Control Geográfico](#7-geo-fencing--control-geográfico)
-8. [API REST — Validation API](#8-api-rest--validation-api)
-9. [API REST — Admin API](#9-api-rest--admin-api)
-10. [Autenticación](#10-autenticación)
-11. [Seguridad y Anti-Fraude](#11-seguridad-y-anti-fraude)
-12. [Panel de Administración](#12-panel-de-administración)
-13. [Despliegue](#13-despliegue)
-14. [Variables de Entorno](#14-variables-de-entorno)
-15. [Testing](#15-testing)
-16. [Estructura del Proyecto](#16-estructura-del-proyecto)
-17. [Responsabilidades OmniCodex vs OmniWallet](#17-responsabilidades-omnicodex-vs-omniwallet)
+4. [Modos Operativos](#4-modos-operativos)
+5. [Definición de Estructura por Segmentos](#5-definición-de-estructura-por-segmentos)
+6. [Motor de Validación — Pipeline (7 fases)](#6-motor-de-validación--pipeline-7-fases)
+7. [Segmento HMAC — Autenticidad Criptográfica](#7-segmento-hmac--autenticidad-criptográfica)
+8. [Geo-fencing — Control Geográfico](#8-geo-fencing--control-geográfico)
+9. [API REST — Validation API](#9-api-rest--validation-api)
+10. [API REST — Admin API](#10-api-rest--admin-api)
+11. [API REST — Batch API](#11-api-rest--batch-api)
+12. [Autenticación](#12-autenticación)
+13. [Seguridad y Anti-Fraude](#13-seguridad-y-anti-fraude)
+14. [Panel de Administración](#14-panel-de-administración)
+15. [Despliegue](#15-despliegue)
+16. [Variables de Entorno](#16-variables-de-entorno)
+17. [Testing](#17-testing)
+18. [Estructura del Proyecto](#18-estructura-del-proyecto)
+19. [Responsabilidades OmniCodex vs OmniWallet](#19-responsabilidades-omnicodex-vs-omniwallet)
+20. [Generación Gestionada — Modelo Conceptual](#20-generación-gestionada--modelo-conceptual)
+21. [Generación Gestionada — Modelo de Datos](#21-generación-gestionada--modelo-de-datos)
+22. [Generación Gestionada — Flujo de Generación](#22-generación-gestionada--flujo-de-generación)
+23. [Generación Gestionada — Flujo de Validación](#23-generación-gestionada--flujo-de-validación)
+24. [Generación Gestionada — Motor de Generación por Segmentos](#24-generación-gestionada--motor-de-generación-por-segmentos)
+25. [Generación Gestionada — Seguridad y Escalabilidad](#25-generación-gestionada--seguridad-y-escalabilidad)
 
 ---
 
 ## 1. Visión General
 
-OmniCodex es un microservicio middleware independiente que valida códigos únicos desechables impresos por fabricantes de productos de gran consumo. Los consumidores escanean estos códigos desde OmniWallet para obtener puntos de fidelización u otras recompensas.
+OmniCodex es un microservicio middleware independiente que gestiona códigos únicos desechables impresos por fabricantes de productos de gran consumo. Los consumidores escanean estos códigos desde OmniWallet para obtener puntos de fidelización u otras recompensas.
 
 ### Concepto fundamental
 
-OmniCodex **no pre-almacena los códigos**. En lugar de ello, el fabricante acuerda con OmniCodex la **norma de generación** del código (estructura, segmentos, algoritmo de dígito de control, y opcionalmente un secreto HMAC). OmniCodex valida en tiempo real cualquier código que cumpla esa norma, registrándolo como canjeado para garantizar single-use.
+OmniCodex soporta **dos modos operativos** para cubrir distintos escenarios de integración con fabricantes:
 
-Esto elimina la necesidad de intercambiar catálogos de millones de códigos entre fabricante y plataforma, y reduce la superficie de ataque ante posibles filtraciones.
+1. **Modo EXTERNAL (validación por norma):** El fabricante genera sus propios códigos según una norma acordada. OmniCodex los valida en tiempo real sin prealmacenamiento, usando la definición de estructura, segmentos, check digit y opcionalmente un segmento HMAC.
 
-### Flujo principal
+2. **Modo MANAGED (generación gestionada):** OmniCodex genera, almacena y entrega los códigos por lotes. El fabricante los recibe y los imprime. La validación posterior se basa en inventario de códigos emitidos, lo que proporciona mayor seguridad que el modo EXTERNAL sin HMAC.
+
+Ambos modos conviven en el mismo sistema. El modo se configura a nivel de `CodeRule`, permitiendo que un mismo proyecto tenga reglas con modos distintos.
+
+### Flujo principal — Modo EXTERNAL
 
 ```
 Fabricante                 OmniWallet                   OmniCodex
@@ -53,6 +65,30 @@ Fabricante                 OmniWallet                   OmniCodex
     │                          │   (API Key + HMAC + Nonce)  │
     │                          │                             │── pipeline 7 fases
     │                          │                             │── registra canje (atómico)
+    │                          │◄── { status: OK/KO } ───────│
+    │                          │                             │
+    │                  asigna puntos, notifica usuario        │
+```
+
+### Flujo principal — Modo MANAGED
+
+```
+Fabricante/Admin           OmniWallet                   OmniCodex
+    │                          │                             │
+    │── solicita lote ─────────────────────────────────────►│
+    │   (API o Admin Panel)    │                             │── genera N códigos
+    │                          │                             │── almacena inventario
+    │◄── descarga lote (CSV/JSON) ──────────────────────────│
+    │                          │                             │
+    │── imprime códigos ─────► producto físico              │
+    │                          │                             │
+    │                  usuario escanea desde app/web         │
+    │                          │                             │
+    │                          │── POST /api/v1/validate ───►│
+    │                          │   (API Key + HMAC + Nonce)  │
+    │                          │                             │── pipeline fases 1-5b
+    │                          │                             │── busca en inventario emitido
+    │                          │                             │── marca como canjeado
     │                          │◄── { status: OK/KO } ───────│
     │                          │                             │
     │                  asigna puntos, notifica usuario        │
@@ -131,37 +167,44 @@ model Project {
 
 ### 3.3 CodeRule
 
-Define la estructura y las reglas de validación para un tipo de código.
+Define la estructura y las reglas de validación para un tipo de código. El campo `generationMode` determina si los códigos son generados externamente por el fabricante o gestionados por OmniCodex.
 
 ```prisma
 model CodeRule {
-  id               String          @id @default(uuid())
-  projectId        String          @map("project_id")
-  project          Project         @relation(fields: [projectId], references: [id])
+  id               String             @id @default(uuid())
+  projectId        String             @map("project_id")
+  project          Project            @relation(fields: [projectId], references: [id])
   name             String
-  skuReference     String?         @map("sku_reference")
-  totalLength      Int             @map("total_length")
+  skuReference     String?            @map("sku_reference")
+  generationMode   CodeGenerationMode @default(EXTERNAL) @map("generation_mode")
+  totalLength      Int                @map("total_length")
   charset          Charset
-  customCharset    String?         @map("custom_charset")
-  hasCheckDigit    Boolean         @map("has_check_digit")
-  checkAlgorithm   CheckAlgorithm? @map("check_algorithm")
-  checkDigitPosition CheckDigitPos? @map("check_digit_position")
-  structureDef     Json            @map("structure_def")
+  customCharset    String?            @map("custom_charset")
+  hasCheckDigit    Boolean            @map("has_check_digit")
+  checkAlgorithm   CheckAlgorithm?    @map("check_algorithm")
+  checkDigitPosition CheckDigitPos?   @map("check_digit_position")
+  structureDef     Json               @map("structure_def")
   separator        String?
-  caseSensitive    Boolean         @default(false) @map("case_sensitive")
+  caseSensitive    Boolean            @default(false) @map("case_sensitive")
   prefix           String?
-  maxRedemptions   Int             @default(1) @map("max_redemptions")
-  fabricantSecret  String?         @map("fabricant_secret")   // Secreto compartido para segmento HMAC
-  allowedCountries String[]        @map("allowed_countries")  // Tier 3 geo-fencing (whitelist)
-  productInfo      Json?           @map("product_info")
-  campaignInfo     Json?           @map("campaign_info")
-  pointsValue      Int?            @map("points_value")
-  isActive         Boolean         @default(true) @map("is_active")
-  createdAt        DateTime        @default(now()) @map("created_at")
-  updatedAt        DateTime        @updatedAt     @map("updated_at")
+  maxRedemptions   Int                @default(1) @map("max_redemptions")
+  fabricantSecret  String?            @map("fabricant_secret")   // Secreto compartido para segmento HMAC
+  allowedCountries String[]           @map("allowed_countries")  // Tier 3 geo-fencing (whitelist)
+  productInfo      Json?              @map("product_info")
+  campaignInfo     Json?              @map("campaign_info")
+  pointsValue      Int?               @map("points_value")
+  isActive         Boolean            @default(true) @map("is_active")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt     @map("updated_at")
   redeemedCodes    RedeemedCode[]
+  codeBatches      CodeBatch[]
 
   @@map("code_rules")
+}
+
+enum CodeGenerationMode {
+  EXTERNAL   // Fabricante genera códigos, OmniCodex solo valida
+  MANAGED    // OmniCodex genera, almacena y valida contra inventario
 }
 
 enum Charset {
@@ -187,6 +230,8 @@ enum CheckDigitPos {
   FIRST
 }
 ```
+
+> **Nota sobre `generationMode`:** El modo se define a nivel de regla, no de proyecto. Un proyecto puede tener reglas EXTERNAL y MANAGED simultáneamente. Las reglas MANAGED requieren que `fabricantSecret` esté configurado, ya que OmniCodex lo usa internamente para generar el segmento HMAC (si la estructura lo incluye).
 
 > **Nota sobre CUSTOM DSL:** El algoritmo `CUSTOM` usa un DSL declarativo JSON, **no** ejecución de código arbitrario (ni `vm`, ni `vm2`). Esto elimina el vector de ataque de sandbox escape.
 
@@ -221,7 +266,96 @@ model RedeemedCode {
 
 **Almacenamiento seguro:** Los códigos se almacenan como `HMAC(code, CODE_HASH_PEPPER)`, no como SHA-256 plano. Esto protege los códigos ante filtraciones de la base de datos.
 
-### 3.5 AdminUser
+### 3.5 CodeBatch (nuevo — Generación Gestionada)
+
+Representa un lote de códigos generados por OmniCodex en modo MANAGED. Contiene la metadata del lote y su estado en el ciclo de vida.
+
+```prisma
+model CodeBatch {
+  id              String         @id @default(uuid())
+  codeRuleId      String         @map("code_rule_id")
+  codeRule        CodeRule       @relation(fields: [codeRuleId], references: [id])
+  batchSize       Int            @map("batch_size")          // Solicitado: 1.000–1.000.000
+  generatedCount  Int            @default(0) @map("generated_count")  // Real generados
+  status          BatchStatus    @default(PENDING)
+  format          BatchFormat    @default(PIN)
+  label           String?                                     // Etiqueta descriptiva del lote
+  expiresAt       DateTime?      @map("expires_at")           // Expiración de los códigos del lote
+  downloadCount   Int            @default(0) @map("download_count")
+  lastDownloadAt  DateTime?      @map("last_download_at")
+  errorMessage    String?        @map("error_message")        // Si status=FAILED, motivo
+  createdBy       String?        @map("created_by")           // admin username o "api"
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt     @map("updated_at")
+  completedAt     DateTime?      @map("completed_at")
+  issuedCodes     IssuedCode[]
+
+  @@index([codeRuleId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("code_batches")
+}
+
+enum BatchStatus {
+  PENDING       // Creado, pendiente de generación
+  GENERATING    // Generación en curso (background job)
+  COMPLETED     // Todos los códigos generados
+  FAILED        // Error durante generación
+  CANCELLED     // Cancelado por admin antes de completar
+  SEALED        // Completado y descargado, no se permite re-descarga sin autorización
+}
+
+enum BatchFormat {
+  PIN           // Código alfanumérico plano
+  CSV           // Exportación CSV
+  JSON          // Exportación JSON
+}
+```
+
+**Restricciones de negocio:**
+- `batchSize` mínimo: 1.000 | máximo: 1.000.000
+- Solo se pueden crear lotes para reglas con `generationMode = MANAGED`
+- Un lote en estado `GENERATING` no puede cancelarse (esperar a que termine o falle)
+- `expiresAt` es opcional; si se define, los códigos del lote se rechazan después de esa fecha
+
+### 3.6 IssuedCode (nuevo — Generación Gestionada)
+
+Cada código individual generado por OmniCodex como parte de un lote. Es el **inventario de códigos emitidos**.
+
+```prisma
+model IssuedCode {
+  id              String          @id @default(uuid())
+  batchId         String          @map("batch_id")
+  batch           CodeBatch       @relation(fields: [batchId], references: [id])
+  codeHash        String          @map("code_hash") @db.VarChar(64)    // HMAC-keyed hash para lookup
+  codeEncrypted   String          @map("code_encrypted")               // Código cifrado (AES-256-GCM)
+  status          IssuedCodeStatus @default(ACTIVE)
+  redeemedAt      DateTime?       @map("redeemed_at")
+  redeemedByUser  String?         @map("redeemed_by_user")             // ow_user_id
+  redemptionCount Int             @default(0) @map("redemption_count")
+  createdAt       DateTime        @default(now()) @map("created_at")
+
+  @@unique([batchId, codeHash])
+  @@index([codeHash])
+  @@index([status])
+  @@map("issued_codes")
+}
+
+enum IssuedCodeStatus {
+  ACTIVE          // Emitido, disponible para canje
+  REDEEMED        // Canjeado (consumido)
+  EXPIRED         // Expirado por vigencia del lote
+  REVOKED         // Revocado manualmente por admin (lote cancelado)
+}
+```
+
+**Diseño de almacenamiento seguro:**
+- `codeHash`: Mismo esquema que `RedeemedCode` — `HMAC(code, CODE_HASH_PEPPER)`. Se usa para lookup rápido durante validación.
+- `codeEncrypted`: El código en texto plano cifrado con AES-256-GCM usando una clave derivada del lote. Necesario para poder exportar/descargar los códigos. **Nunca se almacena en texto plano.**
+- El índice `@@unique([batchId, codeHash])` previene colisiones dentro del lote.
+- El índice `@@index([codeHash])` permite búsqueda rápida cross-batch durante validación.
+
+### 3.7 AdminUser
 
 Usuario del panel de administración. Autenticación real con credenciales, no con `JWT_SECRET`.
 
@@ -240,7 +374,58 @@ model AdminUser {
 
 ---
 
-## 4. Definición de Estructura por Segmentos
+## 4. Modos Operativos
+
+OmniCodex soporta dos modos operativos que conviven en el mismo sistema. El modo se configura a nivel de `CodeRule` mediante el campo `generationMode`.
+
+### 4.1 Modo EXTERNAL (Validación por Norma)
+
+Es el modo original de OmniCodex. El fabricante genera sus propios códigos siguiendo la estructura acordada.
+
+| Aspecto | Descripción |
+|---|---|
+| **Quién genera** | El fabricante |
+| **Prealmacenamiento** | No. OmniCodex no conoce los códigos de antemano |
+| **Base de autenticidad** | Estructura válida + HMAC criptográfico (si configurado) |
+| **Seguridad mínima recomendada** | Nivel 2 (AUTHENTICATED): regla con segmento HMAC |
+| **Riesgo principal** | Sin HMAC, cualquiera que conozca la estructura puede forjar códigos |
+| **Tabla de persistencia** | `redeemed_codes` (solo códigos canjeados) |
+
+### 4.2 Modo MANAGED (Generación Gestionada)
+
+Nuevo modo en el que OmniCodex genera, almacena y entrega los códigos por lotes.
+
+| Aspecto | Descripción |
+|---|---|
+| **Quién genera** | OmniCodex, por petición del fabricante o admin |
+| **Prealmacenamiento** | Sí. Todos los códigos emitidos se almacenan como inventario |
+| **Base de autenticidad** | Inventario: el código solo es válido si fue emitido por OmniCodex |
+| **Seguridad** | Inherentemente más seguro que EXTERNAL sin HMAC, porque la validez se basa en existencia en inventario |
+| **Riesgo principal** | Fuga del lote exportado (mitigado con cifrado y auditoría de descargas) |
+| **Tablas de persistencia** | `code_batches` + `issued_codes` |
+
+### 4.3 Comparación de flujos de validación
+
+| Fase | EXTERNAL | MANAGED |
+|---|---|---|
+| 1. Normalización | Idéntica | Idéntica |
+| 2. Estructura | Idéntica | Idéntica |
+| 3. Segmentos | Idéntica | Idéntica |
+| 4. Check digit | Idéntica | Idéntica |
+| 5. Vigencia | Idéntica | Idéntica + vigencia del lote (`expiresAt`) |
+| 5b. Geo-fencing | Idéntica | Idéntica |
+| 6. Unicidad/Canje | INSERT en `redeemed_codes` si no existe | LOOKUP en `issued_codes` → verificar que existe y está ACTIVE → marcar REDEEMED |
+
+### 4.4 Convivencia
+
+- Un proyecto puede tener reglas EXTERNAL y MANAGED simultáneamente
+- El pipeline de validación detecta automáticamente el modo por el campo `generationMode` de la regla que hace match
+- No se requiere que el caller indique el modo — OmniCodex lo resuelve internamente
+- Las estadísticas y auditoría se unifican: ambos modos alimentan los mismos dashboards
+
+---
+
+## 5. Definición de Estructura por Segmentos
 
 El campo `structureDef` de `CodeRule` define los segmentos que componen el código. Es un objeto JSON con la siguiente forma:
 
@@ -311,7 +496,7 @@ Los separadores (guiones, puntos, espacios) se eliminan en la fase de normalizac
 
 ---
 
-## 5. Motor de Validación — Pipeline (7 fases)
+## 6. Motor de Validación — Pipeline (7 fases)
 
 El pipeline ejecuta las fases de forma secuencial. Si alguna falla, se detiene y devuelve el error específico.
 
@@ -419,7 +604,7 @@ código recibido
 
 ---
 
-## 6. Segmento HMAC — Autenticidad Criptográfica
+## 7. Segmento HMAC — Autenticidad Criptográfica
 
 El segmento HMAC permite verificar que un código fue generado por el fabricante legítimo, sin necesidad de prealmacenar ningún código.
 
@@ -455,7 +640,7 @@ Al crear o actualizar una `CodeRule`, OmniCodex ejecuta automáticamente un lint
 
 ---
 
-## 7. Geo-fencing — Control Geográfico
+## 8. Geo-fencing — Control Geográfico
 
 OmniCodex incluye un sistema de geo-fencing en 3 niveles que controla desde qué países pueden canjearse los códigos.
 
@@ -508,7 +693,7 @@ X-Forwarded-For: <ip-real-del-usuario-final>
 
 ---
 
-## 8. API REST — Validation API
+## 9. API REST — Validation API
 
 Destinada a ser consumida exclusivamente por OmniWallet. Requiere autenticación con **API Key + firma HMAC + Nonce** en cada petición (ver sección 10).
 
@@ -614,7 +799,7 @@ Estadísticas agregadas del proyecto.
 
 ---
 
-## 9. API REST — Admin API
+## 10. API REST — Admin API
 
 Destinada al equipo OmniWallet. Requiere autenticación con **Bearer JWT** (ver sección 10).
 
@@ -655,9 +840,132 @@ Destinada al equipo OmniWallet. Requiere autenticación con **Bearer JWT** (ver 
 | `PUT` | `/api/admin/rules/:id` | Actualizar (ejecuta security linter) |
 | `POST` | `/api/admin/rules/:id/test` | Probar código contra regla (sin registrar canje) |
 
+### Batches (Admin)
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `POST` | `/api/admin/rules/:id/batches` | Crear lote de generación para una regla MANAGED |
+| `GET` | `/api/admin/batches` | Listar lotes (filtrable por regla, proyecto, estado) |
+| `GET` | `/api/admin/batches/:id` | Detalle del lote con estadísticas |
+| `GET` | `/api/admin/batches/:id/download` | Descargar códigos del lote (`?format=csv\|json`) |
+| `POST` | `/api/admin/batches/:id/cancel` | Cancelar lote (solo si PENDING o COMPLETED) |
+| `POST` | `/api/admin/batches/:id/seal` | Sellar lote (bloquea re-descarga sin autorización) |
+
 ---
 
-## 10. Autenticación
+## 11. API REST — Batch API
+
+API pública para generación y gestión de lotes. Requiere autenticación con **API Key + firma HMAC + Nonce** (misma autenticación que Validation API).
+
+### POST /api/v1/batches
+
+Solicita la generación de un lote de códigos para una regla en modo MANAGED.
+
+**Request:**
+```json
+{
+  "code_rule_id": "<uuid>",
+  "batch_size": 50000,
+  "label": "Campaña Verano 2026 - Lote 3",
+  "expires_at": "2026-12-31T23:59:59Z",
+  "format": "PIN"
+}
+```
+
+**Validaciones:**
+- La regla debe existir, estar activa y pertenecer al tenant autenticado
+- La regla debe tener `generationMode = MANAGED`
+- `batch_size` debe estar entre 1.000 y 1.000.000
+- `format` válidos: `PIN`, `CSV`, `JSON`
+
+**Response (202 Accepted):**
+```json
+{
+  "batch_id": "<uuid>",
+  "status": "PENDING",
+  "batch_size": 50000,
+  "estimated_duration_seconds": 30,
+  "poll_url": "/api/v1/batches/<uuid>"
+}
+```
+
+> **Nota:** Lotes > 10.000 se procesan de forma asíncrona. La API devuelve 202 y el cliente hace polling sobre el estado del lote. Lotes ≤ 10.000 se procesan de forma síncrona y la respuesta incluye directamente `status: "COMPLETED"`.
+
+### GET /api/v1/batches/:id
+
+Consultar el estado de un lote. Scoped al tenant autenticado.
+
+**Response (200):**
+```json
+{
+  "batch_id": "<uuid>",
+  "code_rule_id": "<uuid>",
+  "status": "COMPLETED",
+  "batch_size": 50000,
+  "generated_count": 50000,
+  "format": "PIN",
+  "label": "Campaña Verano 2026 - Lote 3",
+  "expires_at": "2026-12-31T23:59:59Z",
+  "download_count": 0,
+  "created_at": "2026-03-21T10:00:00Z",
+  "completed_at": "2026-03-21T10:00:32Z"
+}
+```
+
+### GET /api/v1/batches/:id/download
+
+Descarga los códigos generados. Scoped al tenant autenticado.
+
+**Query params:**
+- `format`: `csv` | `json` (default: el formato especificado en la creación)
+
+**Response CSV (200, Content-Type: text/csv):**
+```csv
+code,batch_id,created_at
+PRO26A7K9M2F8C1B37,<uuid>,2026-03-21T10:00:05Z
+PRO26B3M8K1D9F2A54,<uuid>,2026-03-21T10:00:05Z
+...
+```
+
+**Response JSON (200, Content-Type: application/json):**
+```json
+{
+  "batch_id": "<uuid>",
+  "codes": [
+    "PRO26A7K9M2F8C1B37",
+    "PRO26B3M8K1D9F2A54"
+  ],
+  "total": 50000,
+  "format": "PIN"
+}
+```
+
+> **Nota sobre streaming:** Para lotes > 50.000 códigos, la respuesta se envía como stream (chunked transfer encoding) para evitar cargar todo en memoria.
+
+> **Nota sobre QR/Barcode:** Los formatos de representación visual (QR, código de barras) se generan client-side usando el PIN devuelto. El QR/barcode codifica **solo el PIN**, nunca una URL ni un enlace. OmniCodex no genera imágenes server-side.
+
+### GET /api/v1/batches
+
+Listar lotes del tenant autenticado.
+
+```
+GET /api/v1/batches?code_rule_id=<uuid>&status=COMPLETED&page=1&limit=20
+```
+
+### Códigos de error específicos de Batch API
+
+| `error_code` | HTTP | Descripción |
+|---|---|---|
+| `INVALID_GENERATION_MODE` | 400 | La regla no tiene `generationMode = MANAGED` |
+| `BATCH_SIZE_OUT_OF_RANGE` | 400 | `batch_size` fuera del rango 1.000–1.000.000 |
+| `BATCH_NOT_FOUND` | 404 | Lote no encontrado o no pertenece al tenant |
+| `BATCH_NOT_READY` | 409 | Lote aún en generación, no descargable |
+| `BATCH_SEALED` | 403 | Lote sellado, re-descarga requiere autorización admin |
+| `BATCH_CANCELLED` | 410 | Lote cancelado, códigos revocados |
+
+---
+
+## 12. Autenticación
 
 ### Validation API — API Key + HMAC + Nonce
 
@@ -711,7 +1019,7 @@ curl -X POST https://{host}/api/admin/auth/login \
 
 ---
 
-## 11. Seguridad y Anti-Fraude
+## 13. Seguridad y Anti-Fraude
 
 ### Medidas implementadas
 
@@ -747,6 +1055,18 @@ curl -X POST https://{host}/api/admin/auth/login \
 | `CORS_ORIGIN` | Origen CORS permitido | `https://admin.omnicodex.com` |
 | `GLOBAL_BANNED_COUNTRIES` | Países bloqueados globalmente (ISO alpha-2) | *(vacío)* |
 
+### Seguridad específica de Generación Gestionada (MANAGED)
+
+| Medida | Descripción |
+|---|---|
+| Cifrado de códigos en reposo | Los códigos se almacenan cifrados con AES-256-GCM en `issued_codes.codeEncrypted`. La clave de cifrado se deriva del `CODE_HASH_PEPPER` + `batchId` |
+| Auditoría de descargas | Cada descarga de lote incrementa `download_count` y registra `last_download_at`. Los admin pueden monitorizar descargas sospechosas |
+| Sellado de lotes | Tras la descarga, un admin puede sellar el lote (`SEALED`). Descargas posteriores requieren re-autorización explícita |
+| Validación por inventario | Los códigos MANAGED solo son válidos si existen en `issued_codes` con status `ACTIVE`. No se aceptan códigos que "cumplan la estructura" pero no estén en inventario |
+| Revocación masiva | Cancelar un lote marca todos sus códigos como `REVOKED`, invalidándolos inmediatamente |
+| Anti-colisión | Generación con INSERT batch + ON CONFLICT. Los códigos que colisionen se regeneran automáticamente |
+| Hash indexado | `issued_codes.codeHash` usa el mismo HMAC-keyed hash que `redeemed_codes`, permitiendo lookup O(1) durante validación |
+
 ### Recomendaciones para producción
 
 1. Reverse proxy (Nginx / HAProxy) con TLS termination
@@ -755,12 +1075,15 @@ curl -X POST https://{host}/api/admin/auth/login \
 4. Rate limiting adicional a nivel de edge/WAF
 5. IP allowlist para los endpoints `/api/admin/*`
 6. Monitorizar patrones anómalos: alta tasa de `INVALID_HMAC`, exploración secuencial de códigos
+7. Monitorizar descargas de lotes: alertar si `download_count` > 3 sin sellado
+8. Limitar generación concurrente de lotes por tenant (máx. 3 lotes simultáneos en estado GENERATING)
+9. `BATCH_ENCRYPTION_KEY` separado del `CODE_HASH_PEPPER` en producción (ver sección 25)
 
 ---
 
-## 12. Panel de Administración
+## 14. Panel de Administración
 
-Panel web React para gestionar tenants, proyectos, reglas y probar códigos.
+Panel web React para gestionar tenants, proyectos, reglas, lotes y probar códigos.
 
 **Stack:** React + TypeScript + Vite + Tailwind CSS + shadcn/ui  
 **Servidor de desarrollo:** `http://localhost:5173` (proxy Vite → API en `localhost:3000`)  
@@ -773,9 +1096,10 @@ Panel web React para gestionar tenants, proyectos, reglas y probar códigos.
 | **Dashboard** | Estado de salud de la plataforma, conteo de tenants activos |
 | **Tenants** | CRUD completo, rotación de API Keys, configuración de `banned_countries` |
 | **Projects** | Crear/editar proyectos por tenant, fechas de vigencia |
-| **Code Rules** | Gestión de reglas + Rule Builder visual con security linter integrado |
+| **Code Rules** | Gestión de reglas + Rule Builder visual con security linter integrado. Selector de `generationMode` (EXTERNAL/MANAGED) |
+| **Batches** | Crear lotes, ver progreso de generación, descargar códigos, sellar/cancelar lotes. Solo visible para reglas MANAGED |
 | **Code Tester** | Probar un código contra una regla con resultado debug detallado (solo admin) |
-| **Stats** | Gráficas de canjes por día y por regla |
+| **Stats** | Gráficas de canjes por día y por regla. Incluye métricas de lotes generados vs canjeados para reglas MANAGED |
 
 ### Arranque en desarrollo
 
@@ -787,7 +1111,7 @@ npm run dev
 
 ---
 
-## 13. Despliegue
+## 15. Despliegue
 
 ### Opción A — Digital Ocean App Platform (recomendado)
 
@@ -842,7 +1166,7 @@ Activar temporalmente `SEED_ON_DEPLOY=true`, hacer re-deploy, luego desactivar. 
 
 ---
 
-## 14. Variables de Entorno
+## 16. Variables de Entorno
 
 ```env
 # Server
@@ -874,13 +1198,18 @@ RATE_LIMIT_PER_IP_PER_MINUTE=100
 GLOBAL_BANNED_COUNTRIES=KP,IR,CU,SY
 GEO_REQUIRE_COUNTRY=false
 
+# Batch Generation (Modo MANAGED)
+BATCH_ENCRYPTION_KEY=<generar con openssl rand -hex 32>
+BATCH_MAX_CONCURRENT_PER_TENANT=3
+BATCH_CHUNK_SIZE=5000
+
 # Admin UI (opcional, para desarrollo)
 SEED_ON_DEPLOY=false
 ```
 
 ---
 
-## 15. Testing
+## 17. Testing
 
 ```bash
 # Tests unitarios
@@ -909,10 +1238,15 @@ npm run test:watch
 | API validate end-to-end | Integration |
 | CRUD admin | Integration |
 | Doble canje concurrente | Concurrency (race condition) |
+| `batch-generation/generator` | Unit (generación por segmento) |
+| `batch-generation/service` | Integration (crear, cancelar, sellar lotes) |
+| `validation/redemption-managed` | Unit (lookup inventario + estado) |
+| API batch end-to-end | Integration (crear lote, descargar, validar código generado) |
+| Colisiones en generación | Concurrency (batch INSERT con ON CONFLICT) |
 
 ---
 
-## 16. Estructura del Proyecto
+## 18. Estructura del Proyecto
 
 ```
 codeguard/
@@ -954,7 +1288,15 @@ codeguard/
 │   │   │   │   └── custom.ts         # Custom DSL (sin vm/vm2)
 │   │   │   ├── vigency.ts            # Fase 5: isActive + rango temporal
 │   │   │   ├── geo-fencing.ts        # Fase 5b: Tier 1/2/3 geo-fencing
-│   │   │   └── uniqueness.ts         # Fase 6: HMAC-hash + Redlock + INSERT atómico
+│   │   │   ├── uniqueness.ts         # Fase 6: HMAC-hash + Redlock + INSERT atómico
+│   │   │   └── redemption-managed.ts # Fase 6 MANAGED: lookup inventario + marcar REDEEMED
+│   │   ├── batch-generation/          # Módulo de generación gestionada
+│   │   │   ├── routes.ts             # Endpoints Batch API
+│   │   │   ├── service.ts            # Lógica de negocio (crear, listar, cancelar lotes)
+│   │   │   ├── generator.ts          # Motor de generación por segmentos
+│   │   │   ├── worker.ts             # Background job para lotes grandes (>10K)
+│   │   │   ├── exporter.ts           # Exportación CSV/JSON con streaming
+│   │   │   └── schemas.ts            # JSON Schema validation
 │   │   └── stats/
 │   │       ├── routes.ts
 │   │       └── service.ts
@@ -984,7 +1326,7 @@ codeguard/
 │       └── k6-validate.js            # Load testing con k6
 ├── admin-ui/
 │   ├── src/
-│   │   ├── pages/                    # Dashboard, Tenants, Projects, CodeRules, Stats
+│   │   ├── pages/                    # Dashboard, Tenants, Projects, CodeRules, Batches, Stats
 │   │   ├── components/               # Layout, Login, Card, Badge
 │   │   ├── lib/                      # API client, utils
 │   │   └── hooks/                    # useApi hook
@@ -1011,7 +1353,7 @@ codeguard/
 
 ---
 
-## 17. Responsabilidades OmniCodex vs OmniWallet
+## 19. Responsabilidades OmniCodex vs OmniWallet
 
 | OmniCodex | OmniWallet |
 |---|---|
@@ -1020,8 +1362,425 @@ codeguard/
 | Validar dígito de control | Asignar puntos al usuario |
 | Garantizar unicidad (single-use) con Redlock | Almacenar transacción en CDP |
 | Almacenar códigos canjeados (hasheados) | Notificar al usuario |
-| Rate limiting y anti-fraude | Sincronizar sistemas externos |
-| Estadísticas de canjes | Reportes de negocio |
-| Geo-fencing (detección por IP) | **Reenviar IP real del usuario** en `X-Forwarded-For` |
-| Gestionar reglas de código (Admin API) | Gestionar programas de fidelización |
-| Security linter en creación de reglas | Gestionar el catálogo de productos |
+| **Generar códigos por lotes (modo MANAGED)** | Sincronizar sistemas externos |
+| **Almacenar inventario de códigos emitidos** | Reportes de negocio |
+| **Exportar lotes en CSV/JSON** | **Renderizar QR/barcode client-side** |
+| Rate limiting y anti-fraude | **Reenviar IP real del usuario** en `X-Forwarded-For` |
+| Estadísticas de canjes | Gestionar programas de fidelización |
+| Geo-fencing (detección por IP) | Gestionar el catálogo de productos |
+| Gestionar reglas de código (Admin API) | |
+| Security linter en creación de reglas | |
+
+---
+
+## 20. Generación Gestionada — Modelo Conceptual
+
+### 20.1 Posición en la arquitectura
+
+La generación gestionada añade una nueva responsabilidad a OmniCodex: además de validar códigos, ahora puede **emitirlos**. Esto no reemplaza el modo EXTERNAL, sino que ofrece una alternativa para fabricantes que prefieren delegar la generación.
+
+```
+                    ┌─────────────────────────────────┐
+                    │         OmniCodex               │
+                    │                                 │
+                    │  ┌───────────┐  ┌────────────┐  │
+                    │  │ Validation│  │   Batch     │  │
+  OmniWallet ──────►  │ Pipeline  │  │ Generation  │  ◄──── Admin / Fabricante
+  (validar código)  │  │ (7 fases) │  │ Engine      │  │     (solicitar lote)
+                    │  └─────┬─────┘  └──────┬──────┘  │
+                    │        │               │         │
+                    │        ▼               ▼         │
+                    │  ┌──────────┐   ┌───────────┐   │
+                    │  │redeemed_ │   │ issued_   │   │
+                    │  │codes     │   │ codes     │   │
+                    │  │(EXTERNAL)│   │ (MANAGED) │   │
+                    │  └──────────┘   └───────────┘   │
+                    │        │               │         │
+                    │        └───────┬───────┘         │
+                    │                ▼                  │
+                    │        ┌─────────────┐           │
+                    │        │   Stats &   │           │
+                    │        │   Audit     │           │
+                    │        └─────────────┘           │
+                    └─────────────────────────────────┘
+```
+
+### 20.2 Diferencias clave entre modos
+
+| Dimensión | EXTERNAL | MANAGED |
+|---|---|---|
+| Origen del código | Fabricante | OmniCodex |
+| Prealmacenamiento | No | Sí (inventario `issued_codes`) |
+| Autenticidad | Criptográfica (HMAC) o por estructura | Por inventario (existencia en DB) |
+| Riesgo de forja | Medio-alto sin HMAC, bajo con HMAC | Nulo (solo códigos emitidos son válidos) |
+| Riesgo de fuga | Bajo (no hay catálogo centralizado) | Medio (lote descargable) |
+| Trazabilidad | Por canje | Completa (emisión → descarga → canje) |
+| Escalabilidad de emisión | Ilimitada (fabricante genera) | Limitada por capacidad de generación y almacenamiento |
+
+### 20.3 Responsabilidades nuevas de OmniCodex
+
+1. **Generar** códigos que cumplan la `structureDef` de una `CodeRule`
+2. **Almacenar** cada código generado como inventario (`IssuedCode`)
+3. **Exportar** códigos en formato descargable (CSV, JSON)
+4. **Gestionar** el ciclo de vida del lote (PENDING → GENERATING → COMPLETED → SEALED)
+5. **Validar** códigos generados contra inventario (no contra estructura solamente)
+6. **Auditar** descargas, canjes y cancelaciones
+
+---
+
+## 21. Generación Gestionada — Modelo de Datos
+
+### 21.1 Diagrama de relaciones
+
+```
+Tenant ──1:N──► Project ──1:N──► CodeRule ──1:N──► CodeBatch ──1:N──► IssuedCode
+                                     │
+                                     └──1:N──► RedeemedCode (solo modo EXTERNAL)
+```
+
+### 21.2 Ciclo de vida del lote (CodeBatch)
+
+```
+PENDING ──► GENERATING ──► COMPLETED ──► SEALED
+   │             │              │
+   │             ▼              ▼
+   └──► CANCELLED        CANCELLED
+                │
+                ▼
+             FAILED
+```
+
+| Estado | Descripción | Transiciones permitidas |
+|---|---|---|
+| `PENDING` | Lote creado, esperando generación | → `GENERATING`, → `CANCELLED` |
+| `GENERATING` | Generación en curso (background job) | → `COMPLETED`, → `FAILED` |
+| `COMPLETED` | Generación terminada, listo para descarga | → `SEALED`, → `CANCELLED` |
+| `FAILED` | Error durante generación (parcial o total) | → `PENDING` (reintentar) |
+| `CANCELLED` | Cancelado por admin. Códigos revocados | Estado terminal |
+| `SEALED` | Descargado y sellado. Re-descarga requiere autorización | Estado terminal (salvo unseal por admin) |
+
+### 21.3 Ciclo de vida del código emitido (IssuedCode)
+
+```
+ACTIVE ──► REDEEMED
+   │
+   ├──► EXPIRED (por vigencia del lote)
+   │
+   └──► REVOKED (por cancelación del lote)
+```
+
+| Estado | Descripción |
+|---|---|
+| `ACTIVE` | Disponible para canje |
+| `REDEEMED` | Canjeado exitosamente. `redeemedAt` y `redeemedByUser` rellenados |
+| `EXPIRED` | Expirado porque `batch.expiresAt` fue superado |
+| `REVOKED` | Invalidado por cancelación del lote |
+
+### 21.4 Schema Prisma completo (entidades nuevas)
+
+Ver secciones 3.5 (`CodeBatch`) y 3.6 (`IssuedCode`) para el schema Prisma detallado.
+
+---
+
+## 22. Generación Gestionada — Flujo de Generación
+
+### 22.1 Flujo completo de una petición de lote
+
+```
+1. Request: POST /api/v1/batches
+   {code_rule_id, batch_size, label?, expires_at?, format?}
+
+2. Validaciones:
+   ├── Tenant autenticado (API Key + HMAC)
+   ├── CodeRule existe, activa, pertenece al tenant
+   ├── CodeRule.generationMode == MANAGED
+   ├── batch_size ∈ [1.000, 1.000.000]
+   ├── Lotes GENERATING del tenant < BATCH_MAX_CONCURRENT_PER_TENANT
+   └── Si expires_at, debe ser futuro
+
+3. Crear registro CodeBatch (status: PENDING)
+
+4. Si batch_size ≤ 10.000:
+   │   Generación síncrona → COMPLETED → Response 200
+   │
+   └── Si batch_size > 10.000:
+       Encolar job de generación → Response 202 (PENDING)
+       El worker procesa el lote en background
+
+5. Generación (síncrona o background):
+   ├── Marcar lote como GENERATING
+   ├── Loop por chunks de BATCH_CHUNK_SIZE (default 5.000):
+   │   ├── Generar N códigos usando motor de segmentos (sección 24)
+   │   ├── Calcular codeHash para cada código
+   │   ├── Cifrar cada código (AES-256-GCM)
+   │   ├── INSERT batch en issued_codes (ON CONFLICT regenerar)
+   │   └── Actualizar generatedCount
+   ├── Marcar lote como COMPLETED + completedAt
+   └── Si error: marcar como FAILED + errorMessage
+
+6. Response (síncrona):
+   {batch_id, status, generated_count, ...}
+
+   Response (asíncrona):
+   {batch_id, status: "PENDING", poll_url}
+```
+
+### 22.2 Descarga del lote
+
+```
+1. Request: GET /api/v1/batches/:id/download?format=csv
+
+2. Validaciones:
+   ├── Lote existe y pertenece al tenant
+   ├── Status == COMPLETED (no PENDING, GENERATING, CANCELLED)
+   ├── Status != SEALED (requiere unseal previo)
+   └── Si batch.expiresAt < now() → rechazar con aviso
+
+3. Descifrar códigos (AES-256-GCM)
+
+4. Streaming response:
+   ├── CSV: header + rows (chunked transfer)
+   └── JSON: array de códigos (chunked)
+
+5. Actualizar download_count y last_download_at
+
+6. Log de auditoría: quién descargó, cuándo, formato
+```
+
+### 22.3 Cancelación de lote
+
+```
+1. Request: POST /api/admin/batches/:id/cancel
+
+2. Validaciones:
+   ├── Lote existe
+   ├── Status ∈ [PENDING, COMPLETED] (no se puede cancelar GENERATING)
+   └── Admin autenticado
+
+3. Acciones:
+   ├── Marcar lote como CANCELLED
+   ├── UPDATE issued_codes SET status = 'REVOKED'
+   │   WHERE batch_id = :id AND status = 'ACTIVE'
+   └── Log de auditoría
+
+4. Los códigos REDEEMED no se revocan (ya canjeados)
+```
+
+---
+
+## 23. Generación Gestionada — Flujo de Validación
+
+### 23.1 Validación de un código generado por OmniCodex
+
+El pipeline de validación es **el mismo** para ambos modos. La bifurcación ocurre únicamente en la Fase 6.
+
+```
+Código recibido (POST /api/v1/validate)
+     │
+     ▼
+Fases 1-5b: IDÉNTICAS (normalización, estructura, segmentos, check digit, vigencia, geo-fencing)
+     │
+     ▼
+¿codeRule.generationMode?
+     │
+     ├── EXTERNAL ──► Fase 6 original (uniqueness.ts)
+     │                INSERT redeemed_codes ON CONFLICT
+     │
+     └── MANAGED ──► Fase 6 managed (redemption-managed.ts)
+                     │
+                     ├── 1. Hash del código: HMAC(code, CODE_HASH_PEPPER)
+                     ├── 2. SELECT FROM issued_codes WHERE codeHash = :hash
+                     │      AND batch.codeRuleId = :ruleId
+                     ├── 3. Si no existe → NO_MATCHING_RULE (código no emitido)
+                     ├── 4. Si status = REDEEMED → ALREADY_REDEEMED
+                     ├── 5. Si status = EXPIRED → CODE_EXPIRED
+                     ├── 6. Si status = REVOKED → CODE_REVOKED
+                     ├── 7. Si status = ACTIVE:
+                     │      ├── Verificar batch.expiresAt (si aplica)
+                     │      ├── UPDATE status = REDEEMED, redeemedAt, redeemedByUser
+                     │      └── Return OK
+                     └── 8. Log de auditoría
+```
+
+### 23.2 Códigos de error adicionales para modo MANAGED
+
+| `error_code` | HTTP | Descripción |
+|---|---|---|
+| `CODE_NOT_ISSUED` | 404 | El código cumple la estructura pero no fue emitido por OmniCodex |
+| `CODE_EXPIRED` | 410 | El código fue emitido pero el lote ha expirado |
+| `CODE_REVOKED` | 410 | El código fue revocado (lote cancelado) |
+
+### 23.3 Seguridad del modo MANAGED vs EXTERNAL
+
+En modo MANAGED, un código que "cumple la estructura" pero no existe en `issued_codes` es **rechazado**. Esto es fundamentalmente más seguro que el modo EXTERNAL sin HMAC, donde cualquier código que cumpla la estructura es aceptado.
+
+En la práctica, el modo MANAGED convierte a OmniCodex en la **única fuente de verdad** para códigos válidos. No importa si alguien conoce la estructura — sin estar en el inventario, el código no se acepta.
+
+---
+
+## 24. Generación Gestionada — Motor de Generación por Segmentos
+
+### 24.1 Principio: reutilizar `structureDef`
+
+El motor de generación usa la **misma definición de segmentos** que el motor de validación. No se crea un sistema de composición paralelo.
+
+La regla define la estructura y OmniCodex la usa bidireccionalmente:
+- **Validación:** descompone el código en segmentos y verifica cada uno
+- **Generación:** compone un código generando el valor de cada segmento
+
+### 24.2 Estrategia de generación por tipo de segmento
+
+| Segmento | Categoría | Estrategia de generación |
+|---|---|---|
+| `fixed` | Literal | Emitir `segment.value` tal cual |
+| `numeric` | Aleatorio | `crypto.randomInt(min, max)` formateado a `segment.length` dígitos. Si no hay min/max, rango `[0, 10^length - 1]` |
+| `alpha` | Aleatorio | Random con charset según `segment.case`: upper → `[A-Z]`, lower → `[a-z]`, both → `[A-Za-z]` |
+| `alphanumeric` | Aleatorio | Random con charset `[A-Z0-9]` (o según `codeRule.charset`) |
+| `enum` | Selección | Random de `segment.values[]`. Si hay un solo valor, siempre ese |
+| `date` | Contextual | Fecha del lote (`batch.createdAt`) formateada según `segment.format` (YYYYMMDD, YYMMDD, YYDDD) |
+| `hmac` | Derivado | Calculado con `hmacSha256Base32(payload, fabricantSecret, length)` después de generar todos los segmentos base |
+| `check` | Derivado | Calculado con `checkDigitCalculate(algorithm, dataSegments)` después de generar segmentos base + HMAC |
+
+### 24.3 Orden de generación
+
+Los segmentos se generan en **dos pasadas**, igual que en la validación:
+
+```
+Pasada 1 — Segmentos base (orden de structureDef):
+  fixed → valor literal
+  numeric → random
+  alpha → random
+  alphanumeric → random
+  enum → random selección
+  date → fecha del lote
+  hmac → SKIP (marcado como pendiente)
+  check → SKIP (marcado como pendiente)
+
+Pasada 2 — Segmentos derivados:
+  hmac → HMAC-SHA256-BASE32(concat(appliesTo segments), fabricantSecret)
+  check → calculate(algorithm, concat(appliesTo segments))
+```
+
+### 24.4 Ejemplo de generación
+
+Regla con `structureDef`:
+```json
+{
+  "segments": [
+    { "name": "prefix",  "type": "fixed",         "length": 3, "value": "PRO" },
+    { "name": "batch",   "type": "numeric",        "length": 2 },
+    { "name": "serial",  "type": "alphanumeric",   "length": 6 },
+    { "name": "auth",    "type": "hmac",           "length": 6, "appliesTo": ["batch", "serial"] },
+    { "name": "check",   "type": "check",          "length": 1, "algorithm": "luhn",
+      "appliesTo": ["batch", "serial", "auth"] }
+  ]
+}
+```
+
+**Pasada 1:**
+```
+prefix = "PRO"           (fixed: valor literal)
+batch  = "42"             (numeric: crypto.randomInt(0, 99) → pad a 2 dígitos)
+serial = "K7M3P9"         (alphanumeric: 6 chars random de [A-Z0-9])
+auth   = pendiente
+check  = pendiente
+```
+
+**Pasada 2:**
+```
+auth   = hmacSha256Base32("42K7M3P9", fabricantSecret, 6) → "D4F2GT"
+check  = luhnCalculate("42K7M3P9D4F2GT") → "3"
+```
+
+**Código final:** `PRO42K7M3P9D4F2GT3`
+
+Con separador `-` y prefix: `PRO-42-K7M3P9-D4F2GT-3`
+
+### 24.5 Uso de `crypto.randomInt` para generación segura
+
+Toda la aleatoriedad usa `crypto.randomInt()` o `crypto.randomBytes()` del módulo `node:crypto`. **Nunca `Math.random()`**. Esto garantiza que los códigos sean criptográficamente impredecibles.
+
+### 24.6 Reutilización de funciones existentes
+
+| Función existente | Ubicación | Uso en generación |
+|---|---|---|
+| `hmacSha256Base32()` | `utils/crypto.ts` | Calcular segmento HMAC |
+| `codeHash()` | `utils/crypto.ts` | Generar `codeHash` para almacenamiento |
+| `luhnCalculate()`, etc. | `validation/check-digit/*.ts` | Calcular dígito de control |
+| `getValidator().calculate()` | `validation/check-digit/index.ts` | Dispatcher para cualquier algoritmo |
+
+No se duplica lógica. El motor de generación importa y usa las mismas funciones que el motor de validación.
+
+---
+
+## 25. Generación Gestionada — Seguridad y Escalabilidad
+
+### 25.1 Generación de lotes grandes (hasta 1M)
+
+| Aspecto | Estrategia |
+|---|---|
+| **Procesamiento** | Lotes > 10K → background job. Lotes ≤ 10K → síncrono |
+| **Chunks** | Inserción en chunks de `BATCH_CHUNK_SIZE` (default 5.000) para no bloquear DB |
+| **Transaccionalidad** | Cada chunk en su propia transacción. Si falla un chunk, el lote queda como FAILED con `generatedCount` parcial |
+| **Concurrencia** | Máx. `BATCH_MAX_CONCURRENT_PER_TENANT` lotes en estado GENERATING por tenant |
+| **Timeout** | Job de generación tiene timeout de 30 minutos. Si se excede → FAILED |
+| **Idempotencia** | Si un lote FAILED se reintenta, regenera solo los códigos faltantes (basado en `generatedCount` vs `batchSize`) |
+
+### 25.2 Prevención de colisiones
+
+```
+Por cada chunk de N códigos:
+  1. Generar N códigos en memoria
+  2. Deduplicar dentro del chunk (Set de hashes)
+  3. INSERT batch con ON CONFLICT (batch_id, code_hash) DO NOTHING
+  4. Contar filas insertadas vs intentadas
+  5. Si hay colisiones: regenerar los faltantes y reintentar
+  6. Máx. 3 reintentos por chunk antes de FAILED
+```
+
+**Análisis probabilístico:** Con códigos alfanuméricos de 12 caracteres (charset 36), el espacio es ~4.7×10¹⁸. Para 1M de códigos, la probabilidad de colisión es ~10⁻⁷ (despreciable), pero el mecanismo de retry garantiza corrección incluso en casos extremos.
+
+### 25.3 Almacenamiento eficiente
+
+| Dato | Tamaño estimado por código | Para 1M códigos |
+|---|---|---|
+| `id` (UUID) | 36 bytes | 36 MB |
+| `codeHash` (HMAC-SHA256 hex) | 64 bytes | 64 MB |
+| `codeEncrypted` (AES-256-GCM) | ~80 bytes | 80 MB |
+| `status` (enum) | 4 bytes | 4 MB |
+| Timestamps + FK | ~50 bytes | 50 MB |
+| **Total por código** | **~234 bytes** | **~234 MB** |
+
+Un lote de 1M ocupa ~234 MB en DB. Es manejable, pero los índices añaden overhead. Considerar particionamiento de `issued_codes` por `batch_id` si la tabla supera los 100M de registros.
+
+### 25.4 Exportación segura
+
+| Medida | Descripción |
+|---|---|
+| **Cifrado en reposo** | Códigos almacenados con AES-256-GCM. Clave derivada: `HKDF(BATCH_ENCRYPTION_KEY, batchId)` |
+| **Descifrado bajo demanda** | Solo se descifran en memoria durante la descarga. Nunca se cachean en texto plano |
+| **Streaming** | Lotes > 50K se envían como stream chunked. No se carga todo en memoria |
+| **Audit log** | Cada descarga registra: usuario, IP, timestamp, formato, cantidad de códigos |
+| **Sellado** | Admin puede sellar lote tras descarga. Re-descarga requiere acción explícita de unseal |
+| **Conteo de descargas** | `download_count` visible en admin. Alertar si > 3 descargas sin sellado |
+
+### 25.5 Protección contra fuga de inventario
+
+El riesgo principal del modo MANAGED es que una fuga del lote exportado compromete todos los códigos del lote. Mitigaciones:
+
+1. **Códigos cifrados en DB** — Una fuga de la DB no revela los códigos
+2. **Descarga autenticada** — Requiere API Key + HMAC o JWT admin
+3. **Sellado de lote** — Limita ventana de exposición
+4. **Revocación de lote** — Si se detecta fuga, cancelar el lote invalida todos los códigos activos inmediatamente
+5. **Segregación por lote** — Un lote comprometido no afecta a otros lotes de la misma regla
+6. **Webhook de descarga** — Notificar al tenant cuando se descarga un lote (via `tenant.webhookUrl`)
+
+### 25.6 Variables de entorno nuevas
+
+| Variable | Descripción | Default |
+|---|---|---|
+| `BATCH_ENCRYPTION_KEY` | Clave para cifrado AES-256-GCM de códigos emitidos | Derivado de `CODE_HASH_PEPPER` si no se define |
+| `BATCH_MAX_CONCURRENT_PER_TENANT` | Máximo de lotes en estado GENERATING por tenant | `3` |
+| `BATCH_CHUNK_SIZE` | Tamaño de chunk para INSERT batch | `5000` |
+| `BATCH_JOB_TIMEOUT_MS` | Timeout del job de generación | `1800000` (30 min) |
+| `BATCH_MAX_DOWNLOAD_ALERTS` | Umbral de descargas antes de alertar | `3` |
