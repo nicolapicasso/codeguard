@@ -34,7 +34,7 @@ services:
         value: ${db.DATABASE_URL}
         scope: RUN_AND_BUILD_TIME
       - key: REDIS_URL
-        value: ${redis.REDIS_URL}
+        value: "PENDING"
         scope: RUN_TIME
       - key: JWT_SECRET
         type: SECRET
@@ -82,9 +82,4 @@ databases:
     engine: PG
     version: "16"
     size: db-s-dev-database
-    num_nodes: 1
-  - name: redis
-    engine: VALKEY
-    version: "8"
-    size: db-s-1vcpu-1gb
     num_nodes: 1
