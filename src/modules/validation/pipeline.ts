@@ -11,6 +11,7 @@ import { validateGeoFencing } from './geo-fencing.js';
 import { getCachedProjectWithRules } from '../../utils/cache.js';
 import { metrics } from '../../utils/metrics.js';
 import { randomUUID } from 'crypto';
+import { computeSecurityLevel } from '../code-rules/security-levels.js';
 
 export interface ValidateInput {
   code: string;
@@ -146,6 +147,15 @@ async function tryRule(
 
   const detectedCountry = geoResult.detectedCountry;
 
+  // Compute security level for the matched rule
+  const security = computeSecurityLevel({
+    hasCheckDigit: codeRule.hasCheckDigit,
+    structureDef: codeRule.structureDef as any,
+    fabricantSecret: (codeRule as any).fabricantSecret,
+    allowedCountries: (codeRule as any).allowedCountries,
+    maxRedemptions: codeRule.maxRedemptions,
+  });
+
   // Sandbox mode — simulate phase 6 without persisting
   if (input.sandbox) {
     return {
@@ -160,6 +170,8 @@ async function tryRule(
       redemptionId: `sandbox-${randomUUID().slice(0, 8)}`,
       sandbox: true,
       detectedCountry,
+      securityLevel: security.code,
+      isProductionSafe: security.is_production_safe,
     };
   }
 
@@ -189,6 +201,8 @@ async function tryRule(
       redeemedAt: uniquenessResult.redeemedAt!.toISOString(),
       redemptionId: uniquenessResult.redemptionId!,
       detectedCountry,
+      securityLevel: security.code,
+      isProductionSafe: security.is_production_safe,
     };
   }
 
@@ -204,5 +218,7 @@ async function tryRule(
     redeemedAt: new Date().toISOString(),
     redemptionId: 'dry-run',
     detectedCountry,
+    securityLevel: security.code,
+    isProductionSafe: security.is_production_safe,
   };
 }

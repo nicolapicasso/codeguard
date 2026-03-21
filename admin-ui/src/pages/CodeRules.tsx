@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader } from '../components/Card';
 import { Badge } from '../components/Badge';
+import { SecurityLevelBadge, SecurityWarnings } from '../components/SecurityLevelBadge';
 import { Plus, Pencil, Trash2, X, Save } from 'lucide-react';
 import { tenants as tenantsApi, projects as projectsApi, codeRules as rulesApi } from '../lib/api';
 import { RuleBuilder } from './RuleBuilder';
@@ -321,30 +322,51 @@ export function CodeRules() {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-gray-500">SKU:</span> {selectedRule.skuReference || '-'}</div>
-                <div><span className="text-gray-500">Longitud:</span> {selectedRule.totalLength}</div>
-                <div><span className="text-gray-500">Charset:</span> <Badge>{selectedRule.charset}</Badge></div>
-                <div><span className="text-gray-500">Algoritmo:</span> <Badge>{selectedRule.checkAlgorithm || 'Ninguno'}</Badge></div>
-                <div><span className="text-gray-500">Separador:</span> {selectedRule.separator || 'Ninguno'}</div>
-                <div><span className="text-gray-500">Prefijo:</span> {selectedRule.prefix || 'Ninguno'}</div>
-                <div><span className="text-gray-500">Max canjes:</span> {selectedRule.maxRedemptions}</div>
-                <div><span className="text-gray-500">Puntos:</span> {selectedRule.pointsValue || '-'}</div>
-                <div><span className="text-gray-500">Paises:</span> {(selectedRule.allowedCountries || []).length > 0 ? selectedRule.allowedCountries.join(', ') : 'Todos'}</div>
-                <div>
-                  <span className="text-gray-500">Estado:</span>{' '}
-                  <Badge variant={selectedRule.isActive ? 'success' : 'danger'}>
-                    {selectedRule.isActive ? 'Activa' : 'Inactiva'}
-                  </Badge>
-                </div>
-                <div className="col-span-2">
-                  <span className="text-gray-500">Canjes registrados:</span> {selectedRule._count?.redeemedCodes ?? 0}
-                </div>
-                <div className="col-span-2">
-                  <span className="text-gray-500">Estructura:</span>
-                  <pre className="mt-1 bg-gray-50 p-3 rounded-lg text-xs overflow-x-auto">
-                    {JSON.stringify(selectedRule.structureDef, null, 2)}
-                  </pre>
+              <div className="space-y-4">
+                {/* Security Level */}
+                {selectedRule.security_level && (
+                  <div className="flex items-start gap-3">
+                    <SecurityLevelBadge
+                      level={selectedRule.security_level}
+                      label={selectedRule.security_label}
+                      showDescription
+                    />
+                    {!selectedRule.is_production_safe && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 border border-red-200">
+                        No recomendado para produccion
+                      </span>
+                    )}
+                  </div>
+                )}
+                {selectedRule.security_warnings && (
+                  <SecurityWarnings warnings={selectedRule.security_warnings} />
+                )}
+
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div><span className="text-gray-500">SKU:</span> {selectedRule.skuReference || '-'}</div>
+                  <div><span className="text-gray-500">Longitud:</span> {selectedRule.totalLength}</div>
+                  <div><span className="text-gray-500">Charset:</span> <Badge>{selectedRule.charset}</Badge></div>
+                  <div><span className="text-gray-500">Algoritmo:</span> <Badge>{selectedRule.checkAlgorithm || 'Ninguno'}</Badge></div>
+                  <div><span className="text-gray-500">Separador:</span> {selectedRule.separator || 'Ninguno'}</div>
+                  <div><span className="text-gray-500">Prefijo:</span> {selectedRule.prefix || 'Ninguno'}</div>
+                  <div><span className="text-gray-500">Max canjes:</span> {selectedRule.maxRedemptions}</div>
+                  <div><span className="text-gray-500">Puntos:</span> {selectedRule.pointsValue || '-'}</div>
+                  <div><span className="text-gray-500">Paises:</span> {(selectedRule.allowedCountries || []).length > 0 ? selectedRule.allowedCountries.join(', ') : 'Todos'}</div>
+                  <div>
+                    <span className="text-gray-500">Estado:</span>{' '}
+                    <Badge variant={selectedRule.isActive ? 'success' : 'danger'}>
+                      {selectedRule.isActive ? 'Activa' : 'Inactiva'}
+                    </Badge>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-gray-500">Canjes registrados:</span> {selectedRule._count?.redeemedCodes ?? 0}
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-gray-500">Estructura:</span>
+                    <pre className="mt-1 bg-gray-50 p-3 rounded-lg text-xs overflow-x-auto">
+                      {JSON.stringify(selectedRule.structureDef, null, 2)}
+                    </pre>
+                  </div>
                 </div>
               </div>
             )}
@@ -396,10 +418,10 @@ export function CodeRules() {
                   <thead>
                     <tr className="border-b border-gray-200">
                       <th className="text-left py-3 px-2 font-medium text-gray-500">Nombre</th>
+                      <th className="text-left py-3 px-2 font-medium text-gray-500">Seguridad</th>
                       <th className="text-left py-3 px-2 font-medium text-gray-500">SKU</th>
                       <th className="text-left py-3 px-2 font-medium text-gray-500">Longitud</th>
                       <th className="text-left py-3 px-2 font-medium text-gray-500">Charset</th>
-                      <th className="text-left py-3 px-2 font-medium text-gray-500">Algoritmo</th>
                       <th className="text-left py-3 px-2 font-medium text-gray-500">Canjes</th>
                       <th className="text-left py-3 px-2 font-medium text-gray-500">Estado</th>
                       <th className="text-left py-3 px-2 font-medium text-gray-500">Acciones</th>
@@ -409,10 +431,14 @@ export function CodeRules() {
                     {rules.map((r) => (
                       <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
                         <td className="py-3 px-2 font-medium">{r.name}</td>
+                        <td className="py-3 px-2">
+                          {r.security_level && (
+                            <SecurityLevelBadge level={r.security_level} />
+                          )}
+                        </td>
                         <td className="py-3 px-2 text-gray-500 font-mono text-xs">{r.skuReference || '-'}</td>
                         <td className="py-3 px-2">{r.totalLength}</td>
                         <td className="py-3 px-2"><Badge>{r.charset}</Badge></td>
-                        <td className="py-3 px-2"><Badge>{r.checkAlgorithm || '-'}</Badge></td>
                         <td className="py-3 px-2">{r._count?.redeemedCodes ?? 0}</td>
                         <td className="py-3 px-2">
                           <Badge variant={r.isActive ? 'success' : 'danger'}>

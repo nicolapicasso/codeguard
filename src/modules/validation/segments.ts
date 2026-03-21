@@ -1,6 +1,6 @@
 import type { ValidationFailure } from '../../types/validation.js';
 import type { StructureDefinition, Segment, HmacSegment } from '../../types/structure-def.js';
-import { hmacSha256 } from '../../utils/crypto.js';
+import { hmacTagBase32, hmacSha256 } from '../../utils/crypto.js';
 
 /**
  * Phase 3 — Segment Validation
@@ -80,9 +80,8 @@ function validateHmacSegment(
     .map((name) => parsedSegments.get(name) || '')
     .join('');
 
-  // Compute expected HMAC and truncate to segment length
-  const fullHmac = hmacSha256(dataPayload, fabricantSecret).toUpperCase();
-  const expectedTruncated = fullHmac.substring(0, segment.length);
+  // Compute expected HMAC TAG using BASE32 encoding (5 bits/char, more compact than hex)
+  const expectedTruncated = hmacTagBase32(dataPayload, fabricantSecret, segment.length);
 
   const actualValue = (parsedSegments.get(segment.name) || '').toUpperCase();
 

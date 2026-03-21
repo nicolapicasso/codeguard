@@ -3,12 +3,26 @@
  *
  * Prevents operators from creating rules with dangerously low entropy,
  * weak structures, or configurations that would be easy to brute-force.
- * Returns an array of warning/error messages.
+ *
+ * Two severity levels:
+ *   ERROR   — blocks rule creation (critical security issues)
+ *   WARNING — allows creation but surfaces risk to the operator
+ *
+ * Works in tandem with security-levels.ts to classify and communicate risk.
  */
+
+import { computeSecurityLevel, type SecurityLevel } from './security-levels.js';
 
 export interface LintResult {
   level: 'error' | 'warning';
+  code: string;
   message: string;
+}
+
+export interface LintReport {
+  results: LintResult[];
+  security: SecurityLevel;
+  estimatedEntropy: number;
 }
 
 export function lintCodeRule(data: {
@@ -17,77 +31,104 @@ export function lintCodeRule(data: {
   hasCheckDigit: boolean;
   structureDef: { segments?: Array<{ type: string; length: number; values?: string[]; value?: string }> };
   fabricantSecret?: string | null;
-}): LintResult[] {
+  allowedCountries?: string[];
+  maxRedemptions?: number;
+}): LintReport {
   const results: LintResult[] = [];
+  const segments = data.structureDef?.segments || [];
+  const hasHmac = segments.some((s) => s.type === 'hmac');
+  const hmacSegment = segments.find((s) => s.type === 'hmac');
+
+  // ── ERRORS (block creation) ─────────────────────────────────────────
 
   // 1. Minimum total length
   if (data.totalLength < 8) {
     results.push({
       level: 'error',
-      message: `Total length ${data.totalLength} is too short. Minimum recommended: 8 characters.`,
+      code: 'TOO_SHORT',
+      message: `Total length ${data.totalLength} is too short. Minimum: 8 characters.`,
     });
   }
 
-  // 2. Estimate effective entropy
+  // 2. Ridiculously low entropy
   const entropy = estimateEntropy(data);
   if (entropy < 20) {
     results.push({
       level: 'error',
-      message: `Estimated entropy is only ~${entropy} bits. Minimum recommended: 20 bits. Add more random/alphanumeric segments.`,
+      code: 'LOW_ENTROPY_CRITICAL',
+      message: `Estimated entropy is only ~${entropy} bits. Minimum: 20 bits. Add more random/alphanumeric segments.`,
     });
-  } else if (entropy < 30) {
+  }
+
+  // 3. HMAC segment defined but no secret — broken config
+  if (hasHmac && !data.fabricantSecret) {
+    results.push({
+      level: 'error',
+      code: 'HMAC_NO_SECRET',
+      message: 'HMAC segment defined but no fabricant_secret provided. Codes cannot be verified.',
+    });
+  }
+
+  // ── WARNINGS (allow but surface risk) ───────────────────────────────
+
+  // 4. Low entropy (but not critical)
+  if (entropy >= 20 && entropy < 30) {
     results.push({
       level: 'warning',
+      code: 'LOW_ENTROPY',
       message: `Estimated entropy is ~${entropy} bits. Consider adding more random segments for better security.`,
     });
   }
 
-  // 3. Too many fixed/predictable segments
-  const segments = data.structureDef?.segments || [];
+  // 5. Too many predictable segments
   const fixedCount = segments.filter((s) => s.type === 'fixed' || s.type === 'date').length;
   const totalSegments = segments.length;
   if (totalSegments > 0 && fixedCount / totalSegments > 0.6) {
     results.push({
       level: 'warning',
+      code: 'PREDICTABLE_STRUCTURE',
       message: `${fixedCount} of ${totalSegments} segments are fixed/date (predictable). Add more random segments.`,
     });
   }
 
-  // 4. No check digit AND no HMAC authenticator
-  const hasHmac = segments.some((s) => s.type === 'hmac');
+  // 6. No check digit AND no HMAC
   if (!data.hasCheckDigit && !hasHmac) {
     results.push({
       level: 'warning',
+      code: 'NO_INTEGRITY',
       message: 'No check digit and no HMAC authenticator. Code has no integrity verification.',
     });
   }
 
-  // 5. HMAC authenticator recommended but missing
+  // 7. No HMAC (strongest recommendation)
   if (!hasHmac) {
     results.push({
       level: 'warning',
-      message: 'No HMAC authenticator segment. Without it, codes can be forged by anyone who understands the structure.',
+      code: 'NO_HMAC',
+      message: 'No HMAC authenticator segment. Codes can be forged by anyone who understands the structure.',
     });
   }
 
-  // 6. HMAC segment without fabricant secret
-  if (hasHmac && !data.fabricantSecret) {
-    results.push({
-      level: 'error',
-      message: 'HMAC segment defined but no fabricant_secret provided. Codes cannot be verified.',
-    });
-  }
-
-  // 7. HMAC segment too short
-  const hmacSegment = segments.find((s) => s.type === 'hmac');
-  if (hmacSegment && hmacSegment.length < 6) {
+  // 8. HMAC TAG too short (threshold: 8 chars recommended for BASE32)
+  if (hmacSegment && hmacSegment.length < 8) {
     results.push({
       level: 'warning',
-      message: `HMAC authenticator segment is only ${hmacSegment.length} chars. Recommended: at least 6 for adequate security.`,
+      code: 'HMAC_TAG_SHORT',
+      message: `HMAC TAG is only ${hmacSegment.length} chars. Recommended: at least 8 for adequate security (${hmacSegment.length} chars = ~${Math.floor(hmacSegment.length * 5)} bits of BASE32 entropy).`,
     });
   }
 
-  return results;
+  // ── Compute security level ──────────────────────────────────────────
+  const security = computeSecurityLevel({
+    hasCheckDigit: data.hasCheckDigit,
+    structureDef: data.structureDef,
+    fabricantSecret: data.fabricantSecret,
+    allowedCountries: data.allowedCountries,
+    maxRedemptions: data.maxRedemptions,
+    estimatedEntropy: entropy,
+  });
+
+  return { results, security, estimatedEntropy: entropy };
 }
 
 /**
@@ -105,7 +146,7 @@ function estimateEntropy(data: {
       case 'fixed':
       case 'check':
       case 'hmac':
-        // These are deterministic — 0 entropy
+        // Deterministic — 0 entropy
         break;
       case 'numeric':
         totalBits += seg.length * Math.log2(10); // ~3.32 bits/digit
@@ -122,8 +163,7 @@ function estimateEntropy(data: {
         }
         break;
       case 'date':
-        // ~365 days/year * ~10 years ≈ 12 bits
-        totalBits += 12;
+        totalBits += 12; // ~365 * ~10 years
         break;
     }
   }

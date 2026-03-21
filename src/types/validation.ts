@@ -29,6 +29,10 @@ export interface ValidationSuccess {
   redemptionId: string;
   sandbox?: boolean;
   detectedCountry?: string | null;
+  /** Security level of the matched rule (OPEN | CONTROLLED | AUTHENTICATED | PROTECTED) */
+  securityLevel?: string;
+  /** Whether the matched rule is considered safe for production */
+  isProductionSafe?: boolean;
 }
 
 export interface ValidationFailure {

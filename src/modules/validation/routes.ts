@@ -68,6 +68,8 @@ export async function validationRoutes(app: FastifyInstance): Promise<void> {
       redemption_id: result.redemptionId,
       redeemed_at: result.redeemedAt,
       points_value: result.pointsValue,
+      security_level: result.securityLevel,
+      is_production_safe: result.isProductionSafe,
     };
     if (result.sandbox) {
       response.sandbox = true;

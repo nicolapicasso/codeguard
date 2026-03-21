@@ -5,6 +5,7 @@ import { createCodeRule, listCodeRules, getCodeRule, updateCodeRule, deleteCodeR
 import { runPipeline } from '../validation/pipeline.js';
 import { createCodeRuleSchema, updateCodeRuleSchema, testCodeSchema } from './schemas.js';
 import { lintCodeRule } from './security-linter.js';
+import { computeSecurityLevel } from './security-levels.js';
 
 export async function codeRuleRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('onRequest', verifyJwt);
@@ -35,22 +36,25 @@ export async function codeRuleRoutes(app: FastifyInstance): Promise<void> {
       allowed_countries?: string[];
     };
 
-    // Security linter: check for weak configurations
-    const lintResults = lintCodeRule({
+    // Security linter: check for weak configurations and compute security level
+    const lintReport = lintCodeRule({
       totalLength: body.total_length,
       charset: body.charset,
       hasCheckDigit: body.has_check_digit,
       structureDef: body.structure_def as any,
       fabricantSecret: body.fabricant_secret,
+      allowedCountries: body.allowed_countries,
+      maxRedemptions: body.max_redemptions,
     });
 
-    const lintErrors = lintResults.filter((r) => r.level === 'error');
+    const lintErrors = lintReport.results.filter((r) => r.level === 'error');
     if (lintErrors.length > 0) {
       return reply.status(400).send({
         status: 'KO',
         error_code: 'INSECURE_RULE',
         error_message: 'Rule configuration has security issues that must be resolved',
-        errors: lintErrors.map((e) => e.message),
+        errors: lintErrors.map((e) => ({ code: e.code, message: e.message })),
+        security: lintReport.security,
       });
     }
 
@@ -76,10 +80,19 @@ export async function codeRuleRoutes(app: FastifyInstance): Promise<void> {
       allowedCountries: body.allowed_countries,
     });
 
-    const lintWarnings = lintResults.filter((r) => r.level === 'warning');
-    const response: any = { ...rule };
+    const lintWarnings = lintReport.results.filter((r) => r.level === 'warning');
+    const response: any = {
+      ...rule,
+      security_level: lintReport.security.code,
+      security_level_numeric: lintReport.security.level,
+      security_label: lintReport.security.label,
+      is_production_safe: lintReport.security.is_production_safe,
+    };
     if (lintWarnings.length > 0) {
-      response.security_warnings = lintWarnings.map((w) => w.message);
+      response.security_warnings = lintWarnings.map((w) => ({
+        code: w.code,
+        message: w.message,
+      }));
     }
 
     return reply.status(201).send(response);
@@ -88,7 +101,26 @@ export async function codeRuleRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/admin/projects/:project_id/rules', async (request, reply) => {
     const { project_id } = request.params as { project_id: string };
     const rules = await listCodeRules(project_id);
-    return reply.status(200).send(rules);
+
+    // Enrich each rule with its security level
+    const enriched = rules.map((rule: any) => {
+      const security = computeSecurityLevel({
+        hasCheckDigit: rule.hasCheckDigit,
+        structureDef: rule.structureDef as any,
+        fabricantSecret: rule.fabricantSecret,
+        allowedCountries: rule.allowedCountries,
+        maxRedemptions: rule.maxRedemptions,
+      });
+      return {
+        ...rule,
+        security_level: security.code,
+        security_level_numeric: security.level,
+        security_label: security.label,
+        is_production_safe: security.is_production_safe,
+      };
+    });
+
+    return reply.status(200).send(enriched);
   });
 
   app.get('/api/admin/rules/:id', async (request, reply) => {
@@ -97,7 +129,24 @@ export async function codeRuleRoutes(app: FastifyInstance): Promise<void> {
     if (!rule) {
       return reply.status(404).send({ status: 'KO', error_code: 'NOT_FOUND', error_message: 'Code rule not found' });
     }
-    return reply.status(200).send(rule);
+
+    // Compute security level for the existing rule
+    const security = computeSecurityLevel({
+      hasCheckDigit: rule.hasCheckDigit,
+      structureDef: rule.structureDef as any,
+      fabricantSecret: (rule as any).fabricantSecret,
+      allowedCountries: (rule as any).allowedCountries,
+      maxRedemptions: rule.maxRedemptions,
+    });
+
+    return reply.status(200).send({
+      ...rule,
+      security_level: security.code,
+      security_level_numeric: security.level,
+      security_label: security.label,
+      is_production_safe: security.is_production_safe,
+      security_warnings: security.warnings.length > 0 ? security.warnings : undefined,
+    });
   });
 
   app.put('/api/admin/rules/:id', {
