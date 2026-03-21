@@ -9,13 +9,16 @@ export const config = {
   redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
 
   jwtSecret: process.env.JWT_SECRET || 'dev-jwt-secret',
-  hmacToleranceSeconds: parseInt(process.env.HMAC_TOLERANCE_SECONDS || '300', 10),
+  hmacToleranceSeconds: parseInt(process.env.HMAC_TOLERANCE_SECONDS || '60', 10),
 
   rateLimitPerUserPerMinute: parseInt(process.env.RATE_LIMIT_PER_USER_PER_MINUTE || '30', 10),
   rateLimitPerIpPerMinute: parseInt(process.env.RATE_LIMIT_PER_IP_PER_MINUTE || '100', 10),
 
   storePlainCodes: process.env.STORE_PLAIN_CODES === 'true',
-  customFunctionTimeoutMs: parseInt(process.env.CUSTOM_FUNCTION_TIMEOUT_MS || '100', 10),
+
+  // SECURITY: Server-side pepper for code hash storage (HMAC-keyed).
+  // Prevents rainbow table attacks on code hashes if DB is compromised.
+  codeHashPepper: process.env.CODE_HASH_PEPPER || 'dev-pepper-change-in-production',
 
   // Geo-fencing: comma-separated ISO 3166-1 alpha-2 codes (e.g., "KP,IR,CU,SY")
   globalBannedCountries: (process.env.GLOBAL_BANNED_COUNTRIES || '')

@@ -15,6 +15,7 @@ import { randomUUID } from 'crypto';
 export interface ValidateInput {
   code: string;
   projectId: string;
+  tenantId?: string;
   owUserId?: string;
   owTransactionId?: string;
   ipAddress?: string;
@@ -56,6 +57,15 @@ async function executePipeline(input: ValidateInput): Promise<ValidationResult> 
     };
   }
 
+  // SECURITY: Enforce tenant scoping — prevent BOLA attacks
+  if (input.tenantId && project.tenantId !== input.tenantId) {
+    return {
+      status: 'KO',
+      errorCode: 'TENANT_MISMATCH',
+      errorMessage: 'Project does not belong to authenticated tenant',
+    };
+  }
+
   // Try each active code rule until one matches
   for (const codeRule of project.codeRules) {
     const result = await tryRule(input, project, project.tenant, codeRule);
@@ -85,7 +95,11 @@ async function tryRule(
 
   // Phase 3: Segments (on payload without prefix)
   const structureDef = codeRule.structureDef as unknown as StructureDefinition;
-  const { error: segmentError, parsedSegments } = validateSegments(payload, structureDef);
+  const { error: segmentError, parsedSegments } = validateSegments(
+    payload,
+    structureDef,
+    (codeRule as any).fabricantSecret,
+  );
   if (segmentError) return null; // Not this rule, try next
 
   // Phase 4: Check digit
@@ -171,6 +185,7 @@ async function tryRule(
       codeRule: { id: codeRule.id, name: codeRule.name },
       productInfo: codeRule.productInfo,
       campaignInfo: codeRule.campaignInfo,
+      pointsValue: codeRule.pointsValue,
       redeemedAt: uniquenessResult.redeemedAt!.toISOString(),
       redemptionId: uniquenessResult.redemptionId!,
       detectedCountry,

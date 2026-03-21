@@ -20,6 +20,7 @@ export interface CreateCodeRuleInput {
   campaignInfo?: Record<string, unknown>;
   pointsValue?: number;
   customCheckFunction?: string;
+  fabricantSecret?: string;
   allowedCountries?: string[];
 }
 
@@ -45,6 +46,7 @@ export async function createCodeRule(projectId: string, data: CreateCodeRuleInpu
       campaignInfo: data.campaignInfo as Prisma.InputJsonValue | undefined,
       pointsValue: data.pointsValue,
       customCheckFunction: data.customCheckFunction,
+      fabricantSecret: data.fabricantSecret,
       allowedCountries: data.allowedCountries ?? [],
     },
   });

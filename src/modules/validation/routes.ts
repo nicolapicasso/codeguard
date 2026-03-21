@@ -3,7 +3,7 @@ import { verifyApiKey } from '../auth/api-key.js';
 import { runPipeline } from './pipeline.js';
 import { prisma } from '../../utils/prisma.js';
 import { registerUserRateLimiter } from '../../middleware/rate-limiter.js';
-import { validateRequestSchema, validateCheckQuerySchema, listCodesQuerySchema } from './schemas.js';
+import { validateRequestSchema, listCodesQuerySchema } from './schemas.js';
 
 export async function validationRoutes(app: FastifyInstance): Promise<void> {
   // All validation routes require API Key auth
@@ -25,12 +25,15 @@ export async function validationRoutes(app: FastifyInstance): Promise<void> {
       metadata?: Record<string, unknown>;
     };
 
+    const tenant = (request as any).tenant;
+
     const sandboxHeader = request.headers['x-sandbox'];
     const isSandbox = sandboxHeader === 'true' || sandboxHeader === '1';
 
     const result = await runPipeline({
       code: body.code,
       projectId: body.project_id,
+      tenantId: tenant.id,
       owUserId: body.ow_user_id,
       owTransactionId: body.ow_transaction_id,
       ipAddress: request.ip,
@@ -40,36 +43,31 @@ export async function validationRoutes(app: FastifyInstance): Promise<void> {
     });
 
     if (result.status === 'KO') {
+      // SECURITY: Return minimal error info to public API — no segment names,
+      // no expected values, no internal details. Detailed errors go to logs only.
       const statusMap: Record<string, number> = {
-        INVALID_STRUCTURE: 400,
-        INVALID_SEGMENT: 400,
-        INVALID_CHECK_DIGIT: 400,
-        NO_MATCHING_RULE: 404,
+        INVALID_CODE: 400,
+        NO_MATCHING_RULE: 400,
         ALREADY_REDEEMED: 409,
         PROJECT_INACTIVE: 403,
         PROJECT_EXPIRED: 403,
         RULE_INACTIVE: 403,
         GEO_BLOCKED: 403,
+        TENANT_MISMATCH: 403,
       };
       const httpStatus = statusMap[result.errorCode] || 400;
       return reply.status(httpStatus).send({
         status: 'KO',
         error_code: result.errorCode,
         error_message: result.errorMessage,
-        details: result.details,
       });
     }
 
     const response: Record<string, unknown> = {
       status: 'OK',
-      code: result.code,
-      code_normalized: result.codeNormalized,
-      project: result.project,
-      code_rule: result.codeRule,
-      product_info: result.productInfo,
-      campaign_info: result.campaignInfo,
-      redeemed_at: result.redeemedAt,
       redemption_id: result.redemptionId,
+      redeemed_at: result.redeemedAt,
+      points_value: result.pointsValue,
     };
     if (result.sandbox) {
       response.sandbox = true;
@@ -81,59 +79,23 @@ export async function validationRoutes(app: FastifyInstance): Promise<void> {
     return reply.status(200).send(response);
   });
 
-  // GET /api/v1/validate/check — Pre-validate without redeeming
-  app.get('/api/v1/validate/check', {
-    schema: { querystring: validateCheckQuerySchema },
-  }, async (request, reply) => {
-    const query = request.query as { code: string; project_id: string };
-
-    const result = await runPipeline({
-      code: query.code,
-      projectId: query.project_id,
-      dryRun: true,
-    });
-
-    if (result.status === 'KO') {
-      const statusMap: Record<string, number> = {
-        INVALID_STRUCTURE: 400,
-        INVALID_SEGMENT: 400,
-        INVALID_CHECK_DIGIT: 400,
-        NO_MATCHING_RULE: 404,
-        PROJECT_INACTIVE: 403,
-        PROJECT_EXPIRED: 403,
-        RULE_INACTIVE: 403,
-        GEO_BLOCKED: 403,
-      };
-      const httpStatus = statusMap[result.errorCode] || 400;
-      return reply.status(httpStatus).send({
-        status: 'KO',
-        error_code: result.errorCode,
-        error_message: result.errorMessage,
-        details: result.details,
-      });
-    }
-
-    return reply.status(200).send({
-      status: 'OK',
-      code: result.code,
-      code_normalized: result.codeNormalized,
-      project: result.project,
-      code_rule: result.codeRule,
-      product_info: result.productInfo,
-      campaign_info: result.campaignInfo,
-    });
-  });
+  // SECURITY: GET /validate/check REMOVED from public API.
+  // Pre-validation acts as an oracle for attackers probing code structures.
+  // Code testing is available via Admin API: POST /api/admin/rules/:id/test
 
   // GET /api/v1/codes/:redemption_id — Get a specific redemption
+  // SECURITY: Scoped to authenticated tenant to prevent BOLA
   app.get('/api/v1/codes/:redemption_id', async (request, reply) => {
     const { redemption_id } = request.params as { redemption_id: string };
+    const tenant = (request as any).tenant;
 
     const redeemed = await prisma.redeemedCode.findUnique({
       where: { id: redemption_id },
       include: { codeRule: { include: { project: true } } },
     });
 
-    if (!redeemed) {
+    // BOLA check: verify the redemption belongs to this tenant
+    if (!redeemed || redeemed.codeRule.project.tenantId !== tenant.id) {
       return reply.status(404).send({
         status: 'KO',
         error_code: 'NOT_FOUND',
@@ -143,7 +105,6 @@ export async function validationRoutes(app: FastifyInstance): Promise<void> {
 
     return reply.status(200).send({
       id: redeemed.id,
-      code_hash: redeemed.codeHash,
       code_rule: { id: redeemed.codeRule.id, name: redeemed.codeRule.name },
       project: { id: redeemed.codeRule.project.id, name: redeemed.codeRule.project.name },
       ow_user_id: redeemed.owUserId,
@@ -154,6 +115,7 @@ export async function validationRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // GET /api/v1/codes — List redemptions with filters
+  // SECURITY: Scoped to authenticated tenant to prevent BOLA
   app.get('/api/v1/codes', {
     schema: { querystring: listCodesQuerySchema },
   }, async (request, reply) => {
@@ -164,14 +126,18 @@ export async function validationRoutes(app: FastifyInstance): Promise<void> {
       page?: number;
       limit?: number;
     };
+    const tenant = (request as any).tenant;
 
     const page = query.page || 1;
     const limit = query.limit || 50;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    // BOLA: Always scope to authenticated tenant
+    const where: any = {
+      codeRule: { project: { tenantId: tenant.id } },
+    };
     if (query.project_id) {
-      where.codeRule = { projectId: query.project_id };
+      where.codeRule.projectId = query.project_id;
     }
     if (query.from || query.to) {
       where.redeemedAt = {};
@@ -193,7 +159,6 @@ export async function validationRoutes(app: FastifyInstance): Promise<void> {
     return reply.status(200).send({
       data: data.map((r) => ({
         id: r.id,
-        code_hash: r.codeHash,
         code_rule_id: r.codeRuleId,
         code_rule_name: r.codeRule.name,
         ow_user_id: r.owUserId,

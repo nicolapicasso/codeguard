@@ -11,14 +11,8 @@ export const validateRequestSchema = {
   },
 } as const;
 
-export const validateCheckQuerySchema = {
-  type: 'object',
-  required: ['code', 'project_id'],
-  properties: {
-    code: { type: 'string', minLength: 1 },
-    project_id: { type: 'string', format: 'uuid' },
-  },
-} as const;
+// SECURITY: GET /validate/check removed from public API (oracle attack vector).
+// Code testing available via Admin API: POST /api/admin/rules/:id/test
 
 export const listCodesQuerySchema = {
   type: 'object',

@@ -63,32 +63,37 @@ npm run typecheck
 
 ## Endpoints principales
 
-### Validation API (requiere API Key + HMAC)
+### Validation API (requiere API Key + HMAC + Nonce)
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
 | POST | `/api/v1/validate` | Valida y canjea un código |
-| GET | `/api/v1/validate/check?code=X&project_id=Y` | Pre-validación sin canje |
-| GET | `/api/v1/codes` | Lista canjes con filtros |
-| GET | `/api/v1/codes/:id` | Detalle de un canje |
+| GET | `/api/v1/codes` | Lista canjes con filtros (scoped al tenant) |
+| GET | `/api/v1/codes/:id` | Detalle de un canje (scoped al tenant) |
 | GET | `/api/v1/stats/:project_id` | Estadísticas del proyecto |
 
-### Admin API (requiere Bearer JWT)
+> **Nota:** El endpoint `GET /validate/check` ha sido eliminado de la API pública por seguridad (actúa como oráculo para atacantes). La pre-validación está disponible solo en la Admin API: `POST /api/admin/rules/:id/test`.
+
+### Admin API (requiere Bearer JWT — login con usuario/contraseña)
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
+| POST | `/api/admin/auth/login` | Login con username + password |
+| POST | `/api/admin/auth/setup` | Bootstrap: crear primer admin (solo primer uso) |
 | POST/GET | `/api/admin/tenants` | CRUD Tenants |
 | POST/GET | `/api/admin/tenants/:id/projects` | CRUD Proyectos |
 | POST/GET | `/api/admin/projects/:id/rules` | CRUD Reglas de código |
-| POST | `/api/admin/rules/:id/test` | Probar código contra regla |
+| POST | `/api/admin/rules/:id/test` | Probar código contra regla (solo admin) |
 
 ### Health Checks
 
 | Ruta | Descripción |
 |------|-------------|
 | `/health` | Estado general |
-| `/health/ready` | Readiness (PostgreSQL + Redis) |
+| `/health/ready` | Readiness |
 | `/health/live` | Liveness |
+
+> **Nota:** Swagger UI (`/docs`) está deshabilitado en producción.
 
 ## Autenticación
 
@@ -99,43 +104,121 @@ Cada petición debe incluir:
 ```
 X-Api-Key: {apiKey}
 X-Timestamp: {ISO8601}
-X-Signature: HMAC-SHA256(body, apiSecret)
+X-Nonce: {uuid-unico-por-peticion}
+X-Signature: HMAC-SHA256(payload, apiSecret)
 ```
 
-El timestamp se rechaza si tiene más de 5 minutos de diferencia (anti-replay).
+El **payload firmado** se compone de:
+
+```
+{method}\n{path}\n{timestamp}\n{nonce}\n{body}
+```
+
+- El timestamp se rechaza si difiere más de 60 segundos (configurable via `HMAC_TOLERANCE_SECONDS`)
+- El nonce se almacena en Redis; si se repite dentro de la ventana de tolerancia, se rechaza (anti-replay)
+- La comparación de firmas usa constant-time para prevenir timing attacks
+
+**Modo legacy:** Si no se envía `X-Nonce`, la firma se calcula solo sobre el body (compatible con clientes anteriores, pero sin protección anti-replay completa).
 
 ### Admin API
 
-```
+```bash
+# 1. Setup inicial (solo la primera vez, requiere JWT_SECRET como setup_secret)
+curl -X POST http://localhost:3000/api/admin/auth/setup \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "mi-password-segura", "setup_secret": "<JWT_SECRET>"}'
+
+# 2. Login con credenciales
+curl -X POST http://localhost:3000/api/admin/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "mi-password-segura"}'
+# → {"token": "eyJ...", "expires_in": "2h", "user": {...}}
+
+# 3. Usar el token
 Authorization: Bearer {jwt_token}
 ```
+
+> **Cambio importante:** Ya no se usa `JWT_SECRET` como credencial de login. El admin se autentica con usuario + contraseña. El `JWT_SECRET` solo se usa como signing key (nunca sale del servidor).
 
 ## Ejemplo de validación
 
 ```bash
-# Generar firma
+# Generar firma con nonce anti-replay
 BODY='{"code":"12345678907","project_id":"<uuid>"}'
-SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "<api_secret>" | cut -d' ' -f2)
+TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+NONCE=$(uuidgen)
+SIGN_PAYLOAD="POST\n/api/v1/validate\n${TIMESTAMP}\n${NONCE}\n${BODY}"
+SIGNATURE=$(printf "$SIGN_PAYLOAD" | openssl dgst -sha256 -hmac "<api_secret>" | cut -d' ' -f2)
 
 curl -X POST http://localhost:3000/api/v1/validate \
   -H "Content-Type: application/json" \
   -H "X-Api-Key: <api_key>" \
-  -H "X-Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -H "X-Timestamp: $TIMESTAMP" \
+  -H "X-Nonce: $NONCE" \
   -H "X-Signature: $SIGNATURE" \
   -d "$BODY"
 ```
 
 ## Pipeline de validación
 
-El motor ejecuta 6 fases secuenciales:
+El motor ejecuta 7 fases secuenciales:
 
-1. **Normalización** — Elimina separadores, aplica case, trim
+1. **Normalización** — Unicode NFKC + filtro ASCII + elimina separadores + case
 2. **Estructura** — Verifica longitud, charset, prefijo
-3. **Segmentos** — Valida cada segmento (fixed, numeric, alpha, enum, date)
-4. **Dígito de control** — Luhn, MOD10, MOD11, MOD97, Verhoeff, Damm o Custom
+3. **Segmentos** — Valida cada segmento (fixed, numeric, alpha, enum, date, **hmac**)
+4. **Dígito de control** — Luhn, MOD10, MOD11, MOD97, Verhoeff, Damm o Custom DSL
 5. **Vigencia** — Estado activo + rango temporal del proyecto
-5b. **Geo-fencing** — Restricción geográfica en 3 niveles (ver sección siguiente)
-6. **Unicidad** — SHA-256 + Redlock + INSERT atómico (garantiza single-use)
+5b. **Geo-fencing** — Restricción geográfica en 3 niveles
+6. **Unicidad** — HMAC-keyed hash + Redlock + INSERT atómico (single-use)
+
+## Segmento HMAC — Autenticidad criptográfica sin prealmacenamiento
+
+OmniCodex **no almacena códigos previamente**. La responsabilidad de generar códigos seguros recae en el fabricante. Para garantizar que los códigos no puedan ser fabricados por atacantes, OmniCodex soporta un **segmento HMAC** (autenticador criptográfico):
+
+### Cómo funciona
+
+El fabricante y OmniCodex comparten un secreto (`fabricant_secret`) configurado en la regla de código. El fabricante genera cada código con una porción HMAC truncada que prueba la autenticidad:
+
+```
+[prefijo][lote][serial_aleatorio][hmac_truncado][check_digit]
+```
+
+**Ejemplo conceptual:**
+
+```
+PRO-26-A7K9M2-F8C1B3-7
+ │    │    │       │    └─ check digit (Luhn)
+ │    │    │       └────── HMAC truncado (6 chars, verifica autenticidad)
+ │    │    └────────────── serial aleatorio (6 chars, ~31 bits entropía)
+ │    └─────────────────── lote/fecha (2 chars)
+ └──────────────────────── prefijo fijo
+```
+
+El HMAC se calcula como: `HMAC-SHA256(lote + serial, fabricant_secret)` truncado a los primeros N caracteres hex.
+
+### Configuración en el Rule Builder
+
+```json
+{
+  "segments": [
+    { "name": "prefix", "type": "fixed", "length": 3, "value": "PRO" },
+    { "name": "batch", "type": "numeric", "length": 2 },
+    { "name": "serial", "type": "alphanumeric", "length": 6 },
+    { "name": "auth", "type": "hmac", "length": 6, "appliesTo": ["batch", "serial"] },
+    { "name": "check", "type": "check", "length": 1, "algorithm": "luhn", "appliesTo": ["batch", "serial", "auth"] }
+  ]
+}
+```
+
+Con `fabricant_secret` configurado en la regla. Sin conocer este secreto, un atacante no puede generar códigos válidos aunque conozca la estructura completa.
+
+### Security Linter
+
+Al crear una regla, OmniCodex ejecuta un linter de seguridad que:
+- Rechaza reglas con menos de 20 bits de entropía efectiva
+- Rechaza reglas con segmento HMAC pero sin `fabricant_secret`
+- Advierte si no hay segmento HMAC (códigos sin autenticidad criptográfica)
+- Advierte si el segmento HMAC es demasiado corto (menos de 6 chars)
 
 ## Geo-fencing (Restricción geográfica)
 
@@ -290,23 +373,23 @@ Abre `http://localhost:5173`. El proxy de Vite redirige las peticiones API a `lo
 
 ### Autenticación
 
-El panel requiere un JWT token. Usa el endpoint:
+El panel usa login con usuario y contraseña. En el primer uso, crea un admin:
 
 ```bash
-curl -X POST http://localhost:3000/api/admin/auth/token \
+curl -X POST http://localhost:3000/api/admin/auth/setup \
   -H "Content-Type: application/json" \
-  -d '{"secret":"<JWT_SECRET>"}'
+  -d '{"username": "admin", "password": "mi-password", "setup_secret": "<JWT_SECRET>"}'
 ```
 
-O introduce el JWT_SECRET directamente en la pantalla de login del panel.
+Luego inicia sesión en el panel con usuario y contraseña. Los tokens JWT expiran en 2 horas.
 
 ### Funcionalidades
 
 - **Dashboard** — Estado de salud, conteo de tenants
-- **Tenants** — CRUD completo, rotar API Keys
+- **Tenants** — CRUD completo, rotar API Keys, países baneados
 - **Projects** — Crear/editar proyectos por tenant
-- **Code Rules** — Gestión de reglas + Rule Builder visual
-- **Code Tester** — Probar códigos con resultado debug
+- **Code Rules** — Gestión de reglas + Rule Builder visual con security linter
+- **Code Tester** — Probar códigos con resultado debug (solo admin)
 - **Stats** — Gráficas de canjes por día, por regla
 
 ## Docker (producción)
@@ -316,6 +399,42 @@ docker compose up -d
 ```
 
 Levanta PostgreSQL 16, Redis 7, la API (puerto 3000) y el Admin Panel (puerto 8080).
+
+## Seguridad
+
+### Variables de entorno de seguridad
+
+| Variable | Descripción | Valor por defecto |
+|----------|-------------|-------------------|
+| `JWT_SECRET` | Clave de firma JWT (solo servidor, nunca en cliente) | `dev-jwt-secret` |
+| `CODE_HASH_PEPPER` | Pepper para HMAC-keyed hash de códigos almacenados | `dev-pepper-change-in-production` |
+| `HMAC_TOLERANCE_SECONDS` | Ventana de tolerancia anti-replay | `60` |
+| `STORE_PLAIN_CODES` | Almacenar código en texto plano (solo debug, nunca en prod) | `false` |
+| `CORS_ORIGIN` | Origen CORS permitido en producción | `https://admin.omnicodex.com` |
+| `GLOBAL_BANNED_COUNTRIES` | Países baneados globalmente | _(vacío)_ |
+
+### Medidas de seguridad implementadas
+
+- **Anti-replay con nonce**: Cada petición incluye un nonce único almacenado en Redis; no se acepta dos veces
+- **Constant-time comparison**: Las firmas HMAC se comparan en tiempo constante (previene timing attacks)
+- **HMAC-keyed code storage**: Los códigos se almacenan como HMAC(code, pepper), no como SHA-256 plano
+- **Unicode NFKC + ASCII filter**: Previene ataques de homóglifos (caracteres visualmente idénticos pero distintos)
+- **Tenant scoping (anti-BOLA)**: Todas las queries de validación y listado están scoped al tenant autenticado
+- **Security linter**: Bloquea reglas con configuración insegura (baja entropía, HMAC sin secreto, etc.)
+- **Custom DSL (no vm/vm2)**: Las funciones custom usan un DSL declarativo JSON, no ejecución de código
+- **Admin auth con usuarios**: Login real con usuario/contraseña, tokens de 2h, setup inicial protegido
+- **Swagger disabled in prod**: La documentación API no se expone en producción
+- **CORS restringido en prod**: Solo orígenes configurados
+- **Respuestas mínimas**: La API pública no devuelve detalles internos en errores
+
+### Recomendaciones para producción
+
+1. Reverse proxy (Nginx/HAProxy) delante de la API con TLS termination
+2. `JWT_SECRET` y `CODE_HASH_PEPPER` con valores criptográficamente fuertes
+3. `STORE_PLAIN_CODES=false` siempre
+4. Rate limiting adicional a nivel de edge/WAF
+5. IP allowlist para endpoints admin
+6. Monitorización de patrones anómalos: alta tasa de códigos inválidos, exploración secuencial
 
 ## Estructura del proyecto
 
