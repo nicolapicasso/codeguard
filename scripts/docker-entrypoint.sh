@@ -5,7 +5,8 @@ echo "==> Granting schema permissions..."
 node -e "
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
-prisma.\$executeRawUnsafe('GRANT ALL ON SCHEMA public TO CURRENT_USER')
+prisma.\$executeRawUnsafe('ALTER SCHEMA public OWNER TO CURRENT_USER')
+  .then(() => prisma.\$executeRawUnsafe('GRANT ALL ON SCHEMA public TO CURRENT_USER'))
   .then(() => prisma.\$disconnect())
   .catch((e) => { console.warn('Grant warning:', e.message); return prisma.\$disconnect(); });
 "
