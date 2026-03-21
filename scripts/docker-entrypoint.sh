@@ -1,6 +1,11 @@
 #!/bin/sh
 set -e
 
+echo "==> Granting schema permissions..."
+npx prisma db execute --stdin << 'EOF'
+GRANT ALL ON SCHEMA public TO current_user;
+EOF
+
 echo "==> Running database migrations..."
 npx prisma migrate deploy
 
