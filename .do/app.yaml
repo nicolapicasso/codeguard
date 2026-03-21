@@ -3,8 +3,11 @@
 #
 # Deploy: doctl apps create --spec .do/app.yaml
 # Update: doctl apps update <app-id> --spec .do/app.yaml
+
 name: omnicodex
+
 region: fra
+
 services:
   # ── Backend API ──────────────────────────────────────────
   - name: api
@@ -64,18 +67,22 @@ services:
       - path: /api
       - path: /health
       - path: /docs
-  # ── Admin UI ─────────────────────────────────────────────
+      - path: /metrics
+
+  # ── Admin UI ───────────────────────────────────────────
   - name: admin-ui
     github:
       repo: nicolapicasso/codeguard
       branch: main
       deploy_on_push: true
-    dockerfile_path: admin-ui/Dockerfile
+    source_dir: admin-ui
+    dockerfile_path: Dockerfile
     instance_count: 1
     instance_size_slug: basic-xxs
     http_port: 80
     routes:
       - path: /
+
 # ── Managed Databases ────────────────────────────────────────
 databases:
   - name: db
