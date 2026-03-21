@@ -3,8 +3,8 @@
 #
 # Deploy: doctl apps create --spec .do/app.yaml
 # Update: doctl apps update <app-id> --spec .do/app.yaml
-name: codeguard
-region: nyc
+name: omnicodex
+region: fra
 services:
   # ── Backend API ──────────────────────────────────────────
   - name: api
