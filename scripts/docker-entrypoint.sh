@@ -2,9 +2,13 @@
 set -e
 
 echo "==> Granting schema permissions..."
-npx prisma db execute --stdin << 'EOF'
-GRANT ALL ON SCHEMA public TO current_user;
-EOF
+node -e "
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+prisma.\$executeRawUnsafe('GRANT ALL ON SCHEMA public TO CURRENT_USER')
+  .then(() => prisma.\$disconnect())
+  .catch((e) => { console.warn('Grant warning:', e.message); return prisma.\$disconnect(); });
+"
 
 echo "==> Running database migrations..."
 npx prisma migrate deploy
