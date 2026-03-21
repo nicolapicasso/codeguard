@@ -134,7 +134,145 @@ El motor ejecuta 6 fases secuenciales:
 3. **Segmentos** — Valida cada segmento (fixed, numeric, alpha, enum, date)
 4. **Dígito de control** — Luhn, MOD10, MOD11, MOD97, Verhoeff, Damm o Custom
 5. **Vigencia** — Estado activo + rango temporal del proyecto
+5b. **Geo-fencing** — Restricción geográfica en 3 niveles (ver sección siguiente)
 6. **Unicidad** — SHA-256 + Redlock + INSERT atómico (garantiza single-use)
+
+## Geo-fencing (Restricción geográfica)
+
+OmniCodex incluye un sistema de geo-fencing de 3 niveles que permite controlar desde qué países se pueden escanear códigos.
+
+### Cómo funciona
+
+Cuando llega una petición de validación, OmniCodex determina el país del usuario de dos formas (por orden de prioridad):
+
+1. **Detección automática por IP** — Utiliza la base de datos GeoIP (MaxMind GeoLite2) integrada en el servidor para geolocalizar la IP del request. No requiere llamadas a APIs externas.
+2. **Campo `country` del body** — Fallback si la detección por IP no es posible (IPs privadas, localhost, etc.)
+
+### 3 niveles de restricción
+
+| Nivel | Ámbito | Tipo | Configuración |
+|-------|--------|------|--------------|
+| **Tier 1** | Global | Blacklist | Variable de entorno `GLOBAL_BANNED_COUNTRIES` |
+| **Tier 2** | Por Tenant | Blacklist | Campo `banned_countries` en el tenant (Admin API/UI) |
+| **Tier 3** | Por Regla de código | Whitelist | Campo `allowed_countries` en la regla (Admin API/UI) |
+
+- **Tier 1 (Global):** Se evalúa primero. Bloquea países en todos los tenants y proyectos. Ideal para países sancionados o restricciones legales.
+- **Tier 2 (Tenant):** Cada tenant puede banear países adicionales. Bloquea el escaneo en todos los proyectos del tenant.
+- **Tier 3 (Regla):** Cada regla de código puede definir una **whitelist** de países permitidos. Solo los países de la lista pueden escanear códigos de esa regla.
+
+### Integración con OmniWallet (IMPORTANTE para desarrolladores)
+
+OmniCodex funciona como middleware — las peticiones de escaneo llegan desde OmniWallet, no directamente desde el usuario final. Para que la geolocalización funcione correctamente, **OmniWallet debe reenviar la IP real del usuario** en el header `X-Forwarded-For`.
+
+#### Qué debe hacer OmniWallet
+
+```javascript
+// En el backend de OmniWallet, al procesar un escaneo del usuario:
+const userRealIp = req.headers['x-forwarded-for']
+  || req.headers['x-real-ip']
+  || req.socket.remoteAddress;
+
+// Llamada a OmniCodex
+const response = await fetch('https://omnicodex.example.com/api/v1/validate', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-Api-Key': API_KEY,
+    'X-Timestamp': new Date().toISOString(),
+    'X-Signature': hmacSignature,
+    'X-Forwarded-For': userRealIp,  // <-- OBLIGATORIO para geo-fencing
+  },
+  body: JSON.stringify({
+    code: scannedCode,
+    project_id: projectId,
+    ow_user_id: userId,
+    // country: 'ES',  // Opcional: fallback si IP no geolocalizable
+  }),
+});
+```
+
+#### Flujo completo
+
+```
+Usuario (IP: 85.123.x.x, España)
+    │
+    ▼
+OmniWallet (captura IP real del usuario)
+    │  X-Forwarded-For: 85.123.x.x
+    ▼
+OmniCodex
+    │  1. Lee X-Forwarded-For → 85.123.x.x
+    │  2. GeoIP lookup → país: "ES"
+    │  3. Valida contra Tier 1 (global bans) → OK
+    │  4. Valida contra Tier 2 (tenant bans) → OK
+    │  5. Valida contra Tier 3 (rule whitelist) → OK
+    ▼
+Respuesta: { status: "OK", detected_country: "ES", ... }
+```
+
+#### Respuesta de geo-fencing
+
+Si la validación geográfica falla, la respuesta incluye detalles del bloqueo:
+
+```json
+{
+  "status": "KO",
+  "error_code": "GEO_BLOCKED",
+  "error_message": "This code cannot be scanned from your country",
+  "details": {
+    "tier": "tenant",
+    "country": "KP"
+  }
+}
+```
+
+Si la validación es exitosa, la respuesta incluye el país detectado:
+
+```json
+{
+  "status": "OK",
+  "detected_country": "ES",
+  "code": "ABC12345",
+  ...
+}
+```
+
+### Configuración
+
+#### Variables de entorno
+
+| Variable | Descripción | Ejemplo |
+|----------|-------------|---------|
+| `GLOBAL_BANNED_COUNTRIES` | Países baneados globalmente (ISO alpha-2, separados por coma) | `KP,IR,CU,SY` |
+| `GEO_REQUIRE_COUNTRY` | Si `true`, rechaza peticiones donde no se pueda determinar el país | `false` |
+
+#### API Admin — Tenant banned countries
+
+```bash
+# Crear tenant con países baneados
+curl -X POST /api/admin/tenants \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"ow_tenant_id": "ow-001", "name": "Mi Tenant", "banned_countries": ["KP", "IR"]}'
+
+# Actualizar países baneados de un tenant
+curl -X PUT /api/admin/tenants/:id \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"banned_countries": ["KP", "IR", "CU"]}'
+```
+
+#### API Admin — Rule allowed countries
+
+```bash
+# Crear regla con whitelist de países
+curl -X POST /api/admin/projects/:id/rules \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{..., "allowed_countries": ["ES", "MX", "AR", "CO"]}'
+```
+
+### Panel de Administración
+
+- **Tenants** — Al crear o editar un tenant, se pueden configurar los países baneados
+- **Code Rules (Rule Builder)** — Al crear una regla, se pueden especificar los países permitidos (whitelist)
 
 ## Admin Panel
 
@@ -198,10 +336,11 @@ codeguard/
 │   │   │   ├── structure.ts          # Fase 2
 │   │   │   ├── segments.ts           # Fase 3
 │   │   │   ├── vigency.ts            # Fase 5
+│   │   │   ├── geo-fencing.ts        # Fase 5b (3-tier geo-fencing)
 │   │   │   └── uniqueness.ts         # Fase 6
 │   │   └── stats/                    # Estadísticas
 │   ├── middleware/                    # Rate limiting, logging, errors
-│   └── utils/                        # Crypto, Redis, Prisma, Cache
+│   └── utils/                        # Crypto, Redis, Prisma, Cache, GeoIP
 ├── prisma/                           # Schema + migraciones + seed
 ├── tests/                            # Unit + integration + load
 ├── admin-ui/                        # React admin panel (Vite + Tailwind)

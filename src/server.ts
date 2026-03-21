@@ -22,6 +22,7 @@ import { registerMetricsHooks, registerMetricsRoute } from './utils/metrics.js';
 export async function buildApp() {
   const app = Fastify({
     logger: false, // We use our own pino instance
+    trustProxy: true, // Trust X-Forwarded-For from OmniWallet / reverse proxies
   });
 
   // Plugins

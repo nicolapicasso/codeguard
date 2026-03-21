@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader } from '../components/Card';
 import { Badge } from '../components/Badge';
-import { Plus, RotateCcw, Eye, EyeOff } from 'lucide-react';
+import { Plus, RotateCcw, Eye, EyeOff, Globe } from 'lucide-react';
 import { tenants as tenantsApi } from '../lib/api';
 import { useApi } from '../hooks/useApi';
 
 export function Tenants() {
   const { data: tenantList, loading, error, refetch } = useApi(() => tenantsApi.list());
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ ow_tenant_id: '', name: '', webhook_url: '' });
+  const [formData, setFormData] = useState({ ow_tenant_id: '', name: '', webhook_url: '', banned_countries: '' });
   const [selectedTenant, setSelectedTenant] = useState<any>(null);
   const [showSecret, setShowSecret] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -17,9 +17,18 @@ export function Tenants() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await tenantsApi.create(formData);
+      const bannedCountries = formData.banned_countries
+        .split(',')
+        .map((c) => c.trim().toUpperCase())
+        .filter((c) => c.length === 2);
+      await tenantsApi.create({
+        ow_tenant_id: formData.ow_tenant_id,
+        name: formData.name,
+        webhook_url: formData.webhook_url || undefined,
+        banned_countries: bannedCountries.length > 0 ? bannedCountries : undefined,
+      });
       setShowForm(false);
-      setFormData({ ow_tenant_id: '', name: '', webhook_url: '' });
+      setFormData({ ow_tenant_id: '', name: '', webhook_url: '', banned_countries: '' });
       refetch();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error creating tenant');
@@ -106,6 +115,19 @@ export function Tenants() {
                   placeholder="https://..."
                 />
               </div>
+              <div className="md:col-span-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <Globe className="w-4 h-4 inline mr-1" />
+                  Paises baneados (ISO alpha-2, separados por coma)
+                </label>
+                <input
+                  value={formData.banned_countries}
+                  onChange={(e) => setFormData({ ...formData, banned_countries: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                  placeholder="KP, IR, CU, SY (vacio = sin restriccion)"
+                />
+                <p className="text-xs text-gray-400 mt-1">Codigos escaneados desde estos paises seran rechazados para TODOS los proyectos de este tenant</p>
+              </div>
               <div className="md:col-span-3 flex gap-2">
                 <button type="submit" disabled={submitting} className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-brand-700 disabled:opacity-50">
                   {submitting ? 'Creando...' : 'Crear'}
@@ -147,6 +169,16 @@ export function Tenants() {
                   </div>
                 </>
               )}
+              {selectedTenant.bannedCountries && selectedTenant.bannedCountries.length > 0 && (
+                <div className="col-span-2">
+                  <span className="font-medium text-gray-500">Paises baneados: </span>
+                  <span className="inline-flex gap-1 flex-wrap">
+                    {selectedTenant.bannedCountries.map((c: string) => (
+                      <span key={c} className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-xs font-mono">{c}</span>
+                    ))}
+                  </span>
+                </div>
+              )}
               {selectedTenant.projects && (
                 <div className="col-span-2">
                   <span className="font-medium text-gray-500">Proyectos: </span>
@@ -175,6 +207,7 @@ export function Tenants() {
                     <th className="text-left py-3 px-2 font-medium text-gray-500">Nombre</th>
                     <th className="text-left py-3 px-2 font-medium text-gray-500">OW ID</th>
                     <th className="text-left py-3 px-2 font-medium text-gray-500">Estado</th>
+                    <th className="text-left py-3 px-2 font-medium text-gray-500">Geo-ban</th>
                     <th className="text-left py-3 px-2 font-medium text-gray-500">Creado</th>
                     <th className="text-left py-3 px-2 font-medium text-gray-500">Acciones</th>
                   </tr>
@@ -188,6 +221,20 @@ export function Tenants() {
                         <Badge variant={t.isActive ? 'success' : 'danger'}>
                           {t.isActive ? 'Activo' : 'Inactivo'}
                         </Badge>
+                      </td>
+                      <td className="py-3 px-2">
+                        {t.bannedCountries && t.bannedCountries.length > 0 ? (
+                          <span className="inline-flex gap-0.5 flex-wrap">
+                            {t.bannedCountries.slice(0, 3).map((c: string) => (
+                              <span key={c} className="bg-red-100 text-red-700 px-1.5 py-0.5 rounded text-xs font-mono">{c}</span>
+                            ))}
+                            {t.bannedCountries.length > 3 && (
+                              <span className="text-xs text-gray-400">+{t.bannedCountries.length - 3}</span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400">-</span>
+                        )}
                       </td>
                       <td className="py-3 px-2 text-gray-500">{new Date(t.createdAt).toLocaleDateString('es-ES')}</td>
                       <td className="py-3 px-2">
