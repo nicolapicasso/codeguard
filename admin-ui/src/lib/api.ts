@@ -87,6 +87,30 @@ export const codeRules = {
   test: (id: string, code: string) => request<any>(`/api/admin/rules/${id}/test`, { method: 'POST', body: JSON.stringify({ code }) }),
 };
 
+// --- Batches ---
+
+export const batches = {
+  list: (params?: { code_rule_id?: string; project_id?: string; status?: string; page?: number; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.code_rule_id) qs.set('code_rule_id', params.code_rule_id);
+    if (params?.project_id) qs.set('project_id', params.project_id);
+    if (params?.status) qs.set('status', params.status);
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.limit) qs.set('limit', String(params.limit));
+    const q = qs.toString();
+    return request<any>(`/api/admin/batches${q ? `?${q}` : ''}`);
+  },
+  get: (id: string) => request<any>(`/api/admin/batches/${id}`),
+  create: (ruleId: string, data: { batch_size: number; label?: string; expires_at?: string; format?: string }) =>
+    request<any>(`/api/admin/rules/${ruleId}/batches`, { method: 'POST', body: JSON.stringify(data) }),
+  download: (id: string, format: 'csv' | 'json' = 'csv') =>
+    fetch(`/api/admin/batches/${id}/download?format=${format}`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    }),
+  cancel: (id: string) => request<any>(`/api/admin/batches/${id}/cancel`, { method: 'POST' }),
+  seal: (id: string) => request<any>(`/api/admin/batches/${id}/seal`, { method: 'POST' }),
+};
+
 // --- Stats ---
 
 export const stats = {
