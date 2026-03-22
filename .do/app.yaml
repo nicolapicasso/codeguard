@@ -3,11 +3,8 @@
 #
 # Deploy: doctl apps create --spec .do/app.yaml
 # Update: doctl apps update <app-id> --spec .do/app.yaml
-
 name: omnicodex
-
 region: fra
-
 services:
   # ── Backend API ──────────────────────────────────────────
   - name: api
@@ -63,7 +60,7 @@ services:
         value: ""
       - key: GEO_REQUIRE_COUNTRY
         value: "false"
-  routes:
+    routes:
       - path: /api
         preserve_path_prefix: true
       - path: /health
@@ -72,8 +69,7 @@ services:
         preserve_path_prefix: true
       - path: /metrics
         preserve_path_prefix: true
-
-  # ── Admin UI ───────────────────────────────────────────
+  # ── Admin UI ─────────────────────────────────────────────
   - name: admin-ui
     github:
       repo: nicolapicasso/codeguard
@@ -86,7 +82,6 @@ services:
     http_port: 80
     routes:
       - path: /
-
 # ── Managed Databases ────────────────────────────────────────
 databases:
   - name: db
