@@ -4,6 +4,7 @@ import {
   Users,
   FolderOpen,
   QrCode,
+  Package,
   TestTube,
   BarChart3,
   LogOut,
@@ -17,6 +18,7 @@ const navItems = [
   { to: '/tenants', icon: Users, label: 'Tenants' },
   { to: '/projects', icon: FolderOpen, label: 'Projects' },
   { to: '/code-rules', icon: QrCode, label: 'Code Rules' },
+  { to: '/batches', icon: Package, label: 'Lotes' },
   { to: '/tester', icon: TestTube, label: 'Code Tester' },
   { to: '/stats', icon: BarChart3, label: 'Stats' },
 ];

@@ -96,6 +96,7 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
     prefix: '',
     max_redemptions: 1,
     points_value: 0,
+    generation_mode: 'EXTERNAL' as 'EXTERNAL' | 'MANAGED',
   });
   const [segments, setSegments] = useState<Segment[]>([
     { name: 'codigo', type: 'alphanumeric', length: 8 },
@@ -200,6 +201,7 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
         custom_check_function: form.check_algorithm === 'CUSTOM' ? customFunction : undefined,
         fabricant_secret: fabricantSecret || undefined,
         allowed_countries: countries.length > 0 ? countries : undefined,
+        generation_mode: form.generation_mode,
       });
 
       onCreated();
@@ -235,6 +237,41 @@ export function RuleBuilder({ projectId, onCreated, onCancel }: RuleBuilderProps
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none">
                 {CHARSETS.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
+            </div>
+          </div>
+
+          {/* Generation mode */}
+          <div className="border border-gray-200 rounded-lg p-4">
+            <label className="block text-sm font-medium text-gray-700 mb-3">Modo de generacion</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, generation_mode: 'EXTERNAL' })}
+                className={`text-left p-3 rounded-lg border-2 transition-colors ${
+                  form.generation_mode === 'EXTERNAL'
+                    ? 'border-brand-500 bg-brand-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="font-medium text-sm">EXTERNAL — Solo validacion</div>
+                <p className="text-xs text-gray-500 mt-1">
+                  El fabricante genera los codigos externamente. OmniCodex solo valida estructura, checksum y HMAC.
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, generation_mode: 'MANAGED' })}
+                className={`text-left p-3 rounded-lg border-2 transition-colors ${
+                  form.generation_mode === 'MANAGED'
+                    ? 'border-brand-500 bg-brand-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="font-medium text-sm">MANAGED — Generacion + validacion</div>
+                <p className="text-xs text-gray-500 mt-1">
+                  OmniCodex genera, almacena y valida los codigos. Permite crear lotes y descargar los codigos generados.
+                </p>
+              </button>
             </div>
           </div>
 

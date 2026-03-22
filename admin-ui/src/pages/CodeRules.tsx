@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader } from '../components/Card';
 import { Badge } from '../components/Badge';
-import { Plus, Pencil, Trash2, X, Save } from 'lucide-react';
-import { tenants as tenantsApi, projects as projectsApi, codeRules as rulesApi } from '../lib/api';
+import { Plus, Pencil, Trash2, X, Save, Package } from 'lucide-react';
+import { tenants as tenantsApi, projects as projectsApi, codeRules as rulesApi, batches as batchesApi } from '../lib/api';
 import { RuleBuilder } from './RuleBuilder';
 
 export function CodeRules() {
@@ -19,6 +19,9 @@ export function CodeRules() {
   const [saving, setSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [batchModal, setBatchModal] = useState<{ ruleId: string; ruleName: string } | null>(null);
+  const [batchForm, setBatchForm] = useState({ batch_size: 1000, label: '', expires_at: '', format: 'CSV' });
+  const [batchSubmitting, setBatchSubmitting] = useState(false);
 
   useEffect(() => {
     tenantsApi.list().then(setTenantList).catch(() => {});
@@ -125,6 +128,26 @@ export function CodeRules() {
       alert(err instanceof Error ? err.message : 'Error eliminando regla');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleCreateBatch = async () => {
+    if (!batchModal) return;
+    setBatchSubmitting(true);
+    try {
+      await batchesApi.create(batchModal.ruleId, {
+        batch_size: batchForm.batch_size,
+        label: batchForm.label || undefined,
+        expires_at: batchForm.expires_at || undefined,
+        format: batchForm.format,
+      });
+      setBatchModal(null);
+      setBatchForm({ batch_size: 1000, label: '', expires_at: '', format: 'CSV' });
+      alert('Lote creado correctamente. Ve a la seccion Lotes para ver el progreso.');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error creando lote');
+    } finally {
+      setBatchSubmitting(false);
     }
   };
 
@@ -323,6 +346,12 @@ export function CodeRules() {
             ) : (
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div><span className="text-gray-500">SKU:</span> {selectedRule.skuReference || '-'}</div>
+                <div>
+                  <span className="text-gray-500">Modo:</span>{' '}
+                  <Badge variant={selectedRule.generationMode === 'MANAGED' ? 'success' : 'default'}>
+                    {selectedRule.generationMode || 'EXTERNAL'}
+                  </Badge>
+                </div>
                 <div><span className="text-gray-500">Longitud:</span> {selectedRule.totalLength}</div>
                 <div><span className="text-gray-500">Charset:</span> <Badge>{selectedRule.charset}</Badge></div>
                 <div><span className="text-gray-500">Algoritmo:</span> <Badge>{selectedRule.checkAlgorithm || 'Ninguno'}</Badge></div>
@@ -382,6 +411,83 @@ export function CodeRules() {
         </div>
       )}
 
+      {/* Batch creation modal */}
+      {batchModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-lg mx-4">
+            <CardHeader>
+              <h3 className="font-semibold text-gray-900">Generar Lote</h3>
+              <p className="text-sm text-gray-500 mt-1">Regla: {batchModal.ruleName}</p>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad de codigos *</label>
+                  <input
+                    type="number"
+                    min={1000}
+                    max={1000000}
+                    step={1000}
+                    value={batchForm.batch_size}
+                    onChange={(e) => setBatchForm({ ...batchForm, batch_size: parseInt(e.target.value) || 1000 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Minimo 1.000, maximo 1.000.000</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Etiqueta (opcional)</label>
+                  <input
+                    value={batchForm.label}
+                    onChange={(e) => setBatchForm({ ...batchForm, label: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                    placeholder="Ej: Lote Q1 2026 - Producto X"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Formato</label>
+                    <select
+                      value={batchForm.format}
+                      onChange={(e) => setBatchForm({ ...batchForm, format: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                    >
+                      <option value="CSV">CSV</option>
+                      <option value="JSON">JSON</option>
+                      <option value="PIN">PIN (solo codigos)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Expiracion (opcional)</label>
+                    <input
+                      type="date"
+                      value={batchForm.expires_at}
+                      onChange={(e) => setBatchForm({ ...batchForm, expires_at: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end mt-6">
+                <button
+                  onClick={() => { setBatchModal(null); setBatchForm({ batch_size: 1000, label: '', expires_at: '', format: 'CSV' }); }}
+                  disabled={batchSubmitting}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleCreateBatch}
+                  disabled={batchSubmitting}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 disabled:opacity-50 font-medium"
+                >
+                  {batchSubmitting ? 'Generando...' : 'Generar Lote'}
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Rules table */}
       {selectedProject && (
         <Card>
@@ -397,6 +503,7 @@ export function CodeRules() {
                     <tr className="border-b border-gray-200">
                       <th className="text-left py-3 px-2 font-medium text-gray-500">Nombre</th>
                       <th className="text-left py-3 px-2 font-medium text-gray-500">SKU</th>
+                      <th className="text-left py-3 px-2 font-medium text-gray-500">Modo</th>
                       <th className="text-left py-3 px-2 font-medium text-gray-500">Longitud</th>
                       <th className="text-left py-3 px-2 font-medium text-gray-500">Charset</th>
                       <th className="text-left py-3 px-2 font-medium text-gray-500">Algoritmo</th>
@@ -410,6 +517,11 @@ export function CodeRules() {
                       <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
                         <td className="py-3 px-2 font-medium">{r.name}</td>
                         <td className="py-3 px-2 text-gray-500 font-mono text-xs">{r.skuReference || '-'}</td>
+                        <td className="py-3 px-2">
+                          <Badge variant={r.generationMode === 'MANAGED' ? 'success' : 'default'}>
+                            {r.generationMode || 'EXTERNAL'}
+                          </Badge>
+                        </td>
                         <td className="py-3 px-2">{r.totalLength}</td>
                         <td className="py-3 px-2"><Badge>{r.charset}</Badge></td>
                         <td className="py-3 px-2"><Badge>{r.checkAlgorithm || '-'}</Badge></td>
@@ -424,6 +536,15 @@ export function CodeRules() {
                             <button onClick={() => loadRuleDetail(r.id)} className="text-brand-600 hover:text-brand-800 text-xs font-medium">
                               Detalle
                             </button>
+                            {r.generationMode === 'MANAGED' && (
+                              <button
+                                onClick={() => setBatchModal({ ruleId: r.id, ruleName: r.name })}
+                                className="text-green-600 hover:text-green-800"
+                                title="Generar Lote"
+                              >
+                                <Package className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                             <button
                               onClick={async () => { const detail = await rulesApi.get(r.id); setSelectedRule(detail); startEditing(detail); }}
                               className="text-blue-600 hover:text-blue-800"
