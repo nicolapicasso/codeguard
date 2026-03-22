@@ -202,3 +202,32 @@ model AdminUser {
 
   @@map("admin_users")
 }
+
+// --- Audit & Fraud Detection ---
+
+model ValidationAttempt {
+  id              String   @id @default(uuid())
+  projectId       String?  @map("project_id")
+  codeRuleId      String?  @map("code_rule_id")
+  tenantId        String?  @map("tenant_id")
+  code            String   @db.VarChar(500)
+  status          String   @db.VarChar(10)   // OK or KO
+  errorCode       String?  @map("error_code") @db.VarChar(50)
+  errorMessage    String?  @map("error_message")
+  owUserId        String?  @map("ow_user_id")
+  ipAddress       String?  @map("ip_address")
+  detectedCountry String?  @map("detected_country") @db.VarChar(2)
+  detectedRegion  String?  @map("detected_region")
+  detectedCity    String?  @map("detected_city")
+  userAgent       String?  @map("user_agent")
+  metadata        Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, createdAt])
+  @@index([projectId, createdAt])
+  @@index([ipAddress, createdAt])
+  @@index([owUserId, createdAt])
+  @@index([status, createdAt])
+  @@index([errorCode, createdAt])
+  @@map("validation_attempts")
+}

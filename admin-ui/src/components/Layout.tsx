@@ -7,6 +7,7 @@ import {
   Package,
   TestTube,
   BarChart3,
+  ShieldAlert,
   LogOut,
   ScanBarcode,
 } from 'lucide-react';
@@ -21,6 +22,7 @@ const navItems = [
   { to: '/batches', icon: Package, label: 'Lotes' },
   { to: '/tester', icon: TestTube, label: 'Code Tester' },
   { to: '/stats', icon: BarChart3, label: 'Stats' },
+  { to: '/fraud', icon: ShieldAlert, label: 'Fraude' },
 ];
 
 export function Layout() {
