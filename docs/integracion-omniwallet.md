@@ -6,13 +6,14 @@
 2. [Arquitectura de la Integración](#2-arquitectura-de-la-integración)
 3. [Credenciales y Configuración](#3-credenciales-y-configuración)
 4. [Autenticación HMAC-SHA256](#4-autenticación-hmac-sha256)
-5. [Endpoint: Validar Código](#5-endpoint-validar-código)
-6. [Respuestas y Códigos de Error](#6-respuestas-y-códigos-de-error)
-7. [Otros Endpoints Disponibles](#7-otros-endpoints-disponibles)
-8. [Modo Sandbox (Testing)](#8-modo-sandbox-testing)
-9. [Ejemplos de Implementación](#9-ejemplos-de-implementación)
-10. [Checklist de Integración](#10-checklist-de-integración)
-11. [Preguntas Frecuentes](#11-preguntas-frecuentes)
+5. [Identificación de Usuario (ow_user_id) — IMPORTANTE](#5-identificación-de-usuario-ow_user_id--importante)
+6. [Endpoint: Validar Código](#6-endpoint-validar-código)
+7. [Respuestas y Códigos de Error](#7-respuestas-y-códigos-de-error)
+8. [Otros Endpoints Disponibles](#8-otros-endpoints-disponibles)
+9. [Modo Sandbox (Testing)](#9-modo-sandbox-testing)
+10. [Ejemplos de Implementación](#10-ejemplos-de-implementación)
+11. [Checklist de Integración](#11-checklist-de-integración)
+12. [Preguntas Frecuentes](#12-preguntas-frecuentes)
 
 ---
 
@@ -64,7 +65,7 @@ POST https://<omnicodex-url>/api/v1/validate
 |------|-------------|---------------|
 | Código escaneado | Sí | Del QR que escanea el usuario |
 | Project ID | Sí | Configurado por proyecto/campaña (se lo damos nosotros) |
-| User ID | Recomendado | ID interno del usuario en OmniWallet |
+| **User ID** | **Sí** | **ID interno del usuario en OmniWallet (ver [sección 5](#5-identificación-de-usuario-ow_user_id--importante))** |
 | País | Opcional | Geolocalización del dispositivo del usuario |
 | Transaction ID | Opcional | ID de transacción de OmniWallet para trazabilidad |
 
@@ -156,7 +157,90 @@ El resultado se envía en formato hexadecimal en el header `X-Signature`.
 
 ---
 
-## 5. Endpoint: Validar Código
+## 5. Identificación de Usuario (ow_user_id) — IMPORTANTE
+
+> **El campo `ow_user_id` es CRÍTICO para la seguridad del sistema.** Aunque
+> técnicamente es opcional en el schema, su ausencia desactiva la mayoría de las
+> protecciones anti-fraude. **Debe enviarse SIEMPRE.**
+
+### ¿Qué es `ow_user_id`?
+
+Es el identificador interno del usuario en OmniWallet (el ID de vuestra base
+de datos). Se envía en el body de cada petición de validación.
+
+```json
+{
+  "code": "ABC-1234-XYZ",
+  "project_id": "550e8400-...",
+  "ow_user_id": "user-789"
+}
+```
+
+### ¿Por qué es tan importante?
+
+Sin `ow_user_id`, OmniCodex no puede:
+
+| Funcionalidad | Sin `ow_user_id` | Con `ow_user_id` |
+|---------------|-------------------|-------------------|
+| Rate limiting por usuario | Solo por IP (fácil de evadir) | 30 req/min por usuario real |
+| Detección de fraude | No puede identificar usuarios sospechosos | Detecta patrones: alta tasa de fallos, múltiples IPs, múltiples países |
+| Trazabilidad de canjes | Solo IP + timestamp | Usuario concreto + IP + timestamp |
+| Códigos PROTECTED (nivel 3) | **BLOQUEADO** — la petición será rechazada | Funciona correctamente |
+| Auditoría | Limitada | Completa: quién, cuándo, desde dónde |
+
+### Rate Limiting por usuario
+
+OmniCodex aplica un límite de **30 validaciones por minuto por usuario**.
+La clave de rate limiting se compone de:
+
+```
+API Key + ow_user_id → máximo 30 req/min
+```
+
+Si no se envía `ow_user_id`, el rate limiting cae a nivel de IP, que es mucho
+menos granular y fácil de evadir con VPNs o redes móviles.
+
+### Detección de fraude
+
+OmniCodex analiza el comportamiento de cada `ow_user_id` en una ventana de 7 días:
+
+- **Tasa de fallos**: usuarios con muchos intentos fallidos son marcados como sospechosos
+- **Códigos distintos**: un usuario probando muchos códigos distintos es sospechoso
+- **Múltiples IPs**: un mismo usuario desde muchas IPs diferentes
+- **Múltiples países**: un mismo usuario apareciendo desde distintos países
+
+Todo esto requiere que el `ow_user_id` se envíe de forma **consistente** (siempre
+el mismo ID para el mismo usuario).
+
+### Códigos PROTECTED (nivel de seguridad 3)
+
+Para códigos con nivel de seguridad PROTECTED (el más alto), el `ow_user_id` es
+**obligatorio**. Si no se envía, la petición será rechazada con error:
+
+```json
+{
+  "status": "KO",
+  "error_code": "INVALID_CODE",
+  "error_message": "PROTECTED level rule requires ow_user_id for anti-fraud traceability"
+}
+```
+
+### Qué valor usar como `ow_user_id`
+
+| Opción | Recomendación |
+|--------|---------------|
+| ID numérico de la BD (`12345`) | Válido |
+| UUID (`550e8400-e29b-...`) | Válido |
+| Email del usuario | **NO** — es dato personal, no debe enviarse |
+| Teléfono del usuario | **NO** — es dato personal |
+| Hash del ID (`sha256(userId)`) | Aceptable, pero pierde utilidad para soporte |
+
+**Recomendación**: usar el ID interno de la base de datos de OmniWallet tal cual.
+No contiene información personal y permite trazabilidad completa.
+
+---
+
+## 6. Endpoint: Validar Código
 
 ### Request
 
@@ -184,7 +268,7 @@ POST /api/v1/validate
 |-------|------|-------------|-------------|
 | `code` | string | **Sí** | El código escaneado por el usuario |
 | `project_id` | string (UUID) | **Sí** | ID del proyecto en OmniCodex |
-| `ow_user_id` | string | Recomendado | ID del usuario en OmniWallet (para trazabilidad y anti-fraude) |
+| `ow_user_id` | string | **Sí** (ver [sección 5](#5-identificación-de-usuario-ow_user_id--importante)) | ID del usuario en OmniWallet — activa rate limiting, detección de fraude y trazabilidad |
 | `ow_transaction_id` | string | Opcional | ID de la transacción en OmniWallet |
 | `country` | string (2 chars) | Opcional | País ISO alpha-2 del usuario (ej: `ES`, `MX`) |
 | `metadata` | object | Opcional | Datos extra (versión de app, dispositivo, etc.) |
@@ -192,7 +276,7 @@ POST /api/v1/validate
 **Notas importantes:**
 - El campo `code` es el texto completo que el usuario escanea o introduce
 - OmniCodex se encarga de normalizar el código (quitar espacios, ajustar mayúsculas según la regla)
-- El `ow_user_id` es **muy recomendado**: sin él, no podemos detectar fraude por usuario
+- El `ow_user_id` es **obligatorio en la práctica** — ver [sección 5](#5-identificación-de-usuario-ow_user_id--importante) para detalles
 - El `country` se detecta automáticamente por la IP si no se envía, pero enviarlo mejora la precisión
 
 ### Response — Éxito (HTTP 200)
@@ -228,7 +312,7 @@ POST /api/v1/validate
 
 ---
 
-## 6. Respuestas y Códigos de Error
+## 7. Respuestas y Códigos de Error
 
 ### Response — Error (HTTP 400/403/409)
 
@@ -273,7 +357,7 @@ Si status == "KO":
 
 ---
 
-## 7. Otros Endpoints Disponibles
+## 8. Otros Endpoints Disponibles
 
 Estos endpoints son opcionales. El único necesario para la validación es
 `POST /api/v1/validate`.
@@ -313,7 +397,7 @@ GET  /api/v1/batches         → Listar lotes
 
 ---
 
-## 8. Modo Sandbox (Testing)
+## 9. Modo Sandbox (Testing)
 
 Para probar la integración sin consumir canjes reales, añadir el header:
 
@@ -335,7 +419,7 @@ En modo sandbox:
 
 ---
 
-## 9. Ejemplos de Implementación
+## 10. Ejemplos de Implementación
 
 ### PHP (con cURL)
 
@@ -574,7 +658,7 @@ async function validateCode(code: string, projectId: string, userId?: string) {
 
 ---
 
-## 10. Checklist de Integración
+## 11. Checklist de Integración
 
 ### Preparación
 
@@ -587,8 +671,10 @@ async function validateCode(code: string, projectId: string, userId?: string) {
 
 - [ ] Implementar la función de firma HMAC-SHA256
 - [ ] Implementar la llamada a `POST /api/v1/validate`
-- [ ] Enviar `ow_user_id` con el ID del usuario de OmniWallet
-- [ ] Manejar todos los códigos de error (ver tabla en sección 6)
+- [ ] **Enviar SIEMPRE `ow_user_id`** con el ID interno del usuario (ver [sección 5](#5-identificación-de-usuario-ow_user_id--importante))
+- [ ] Verificar que el `ow_user_id` es consistente (mismo usuario = mismo ID siempre)
+- [ ] No enviar datos personales (email, teléfono) como `ow_user_id`
+- [ ] Manejar todos los códigos de error (ver tabla en sección 7)
 - [ ] Implementar mensajes de error apropiados para el usuario final
 
 ### Testing
@@ -610,7 +696,7 @@ async function validateCode(code: string, projectId: string, userId?: string) {
 
 ---
 
-## 11. Preguntas Frecuentes
+## 12. Preguntas Frecuentes
 
 ### ¿Puedo validar un código más de una vez?
 Depende de la configuración de la regla. Por defecto, cada código solo puede
