@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader } from '../components/Card';
 import { Badge } from '../components/Badge';
-import { Plus } from 'lucide-react';
-import { tenants as tenantsApi, projects as projectsApi } from '../lib/api';
+import { Plus, BarChart3, ChevronLeft } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { tenants as tenantsApi, projects as projectsApi, stats as statsApi } from '../lib/api';
+
+const COLORS = ['#3E94AF', '#E97451', '#6366F1', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
 
 export function Projects() {
   const [tenantList, setTenantList] = useState<any[]>([]);
@@ -12,6 +15,10 @@ export function Projects() {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ name: '', description: '', starts_at: '', ends_at: '' });
   const [submitting, setSubmitting] = useState(false);
+  // Detail view
+  const [detailProject, setDetailProject] = useState<any>(null);
+  const [projectStats, setProjectStats] = useState<any>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
 
   useEffect(() => {
     tenantsApi.list().then(setTenantList).catch(() => {});
@@ -56,6 +63,171 @@ export function Projects() {
     }
   };
 
+  const openProjectDetail = async (project: any) => {
+    setDetailProject(project);
+    setStatsLoading(true);
+    try {
+      const st = await statsApi.adminProject(project.id, 30).catch(() => null);
+      setProjectStats(st);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  const chartData = projectStats?.by_day ? [...projectStats.by_day].reverse() : [];
+
+  // ========== PROJECT DETAIL VIEW ==========
+  if (detailProject) {
+    return (
+      <div>
+        <button
+          onClick={() => { setDetailProject(null); setProjectStats(null); }}
+          className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900 mb-4"
+        >
+          <ChevronLeft className="w-4 h-4" /> Volver a Proyectos
+        </button>
+
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">{detailProject.name}</h1>
+            <p className="text-gray-500 mt-1">
+              {detailProject.description || 'Sin descripcion'}
+              {detailProject.startsAt && ` — ${new Date(detailProject.startsAt).toLocaleDateString('es-ES')} a ${detailProject.endsAt ? new Date(detailProject.endsAt).toLocaleDateString('es-ES') : '...'}`}
+            </p>
+          </div>
+          <Badge variant={detailProject.isActive ? 'success' : 'danger'}>
+            {detailProject.isActive ? 'Activo' : 'Inactivo'}
+          </Badge>
+        </div>
+
+        {statsLoading ? (
+          <p className="text-gray-500">Cargando analitica...</p>
+        ) : projectStats ? (
+          <>
+            {/* KPIs */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <Card>
+                <CardContent className="text-center py-4">
+                  <p className="text-3xl font-bold text-gray-900">{projectStats.total_redemptions.toLocaleString()}</p>
+                  <p className="text-xs text-gray-500 mt-1">Validaciones</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="text-center py-4">
+                  <p className="text-3xl font-bold text-gray-900">{projectStats.unique_users.toLocaleString()}</p>
+                  <p className="text-xs text-gray-500 mt-1">Usuarios unicos</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="text-center py-4">
+                  <p className="text-3xl font-bold text-gray-900">{projectStats.total_batches}</p>
+                  <p className="text-xs text-gray-500 mt-1">Lotes</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="text-center py-4">
+                  <p className="text-3xl font-bold text-gray-900">{projectStats.total_codes_generated.toLocaleString()}</p>
+                  <p className="text-xs text-gray-500 mt-1">Codigos generados</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Daily chart */}
+            {chartData.length > 0 && (
+              <Card className="mb-6">
+                <CardHeader><h2 className="font-semibold">Validaciones diarias (30 dias)</h2></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(d) => { const dt = new Date(d); return `${dt.getDate()}/${dt.getMonth() + 1}`; }} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <Tooltip
+                        labelFormatter={(d) => new Date(d).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                        formatter={(value: number) => [value.toLocaleString(), 'Validaciones']}
+                      />
+                      <Bar dataKey="count" fill="#3E94AF" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              {/* By rule */}
+              {projectStats.by_rule && projectStats.by_rule.length > 0 && (
+                <Card>
+                  <CardHeader><h2 className="font-semibold">Por regla</h2></CardHeader>
+                  <CardContent>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200">
+                          <th className="text-left py-2 px-2 font-medium text-gray-500">Regla</th>
+                          <th className="text-left py-2 px-2 font-medium text-gray-500">Modo</th>
+                          <th className="text-right py-2 px-2 font-medium text-gray-500">Canjes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {projectStats.by_rule.map((r: any) => (
+                          <tr key={r.rule_id} className="border-b border-gray-50">
+                            <td className="py-2 px-2 font-medium">{r.rule_name}</td>
+                            <td className="py-2 px-2">
+                              <Badge variant={r.generation_mode === 'MANAGED' ? 'success' : 'default'}>
+                                {r.generation_mode}
+                              </Badge>
+                            </td>
+                            <td className="py-2 px-2 text-right font-mono">{r.redemptions.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* By country */}
+              {projectStats.by_country && projectStats.by_country.length > 0 && (
+                <Card>
+                  <CardHeader><h2 className="font-semibold">Por pais</h2></CardHeader>
+                  <CardContent>
+                    <div className="flex flex-col md:flex-row items-center gap-4">
+                      <div className="w-44 h-44">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie data={projectStats.by_country} dataKey="count" nameKey="country" cx="50%" cy="50%" outerRadius={65} innerRadius={30}>
+                              {projectStats.by_country.map((_: any, i: number) => (
+                                <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip formatter={(value: number) => value.toLocaleString()} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        {projectStats.by_country.map((c: any, i: number) => (
+                          <div key={c.country} className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                              <span className="font-medium">{c.country}</span>
+                            </div>
+                            <span className="text-gray-500 font-mono">{c.count.toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="text-center py-8 text-gray-400">Sin datos de analitica disponibles</div>
+        )}
+      </div>
+    );
+  }
+
+  // ========== LIST VIEW ==========
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -183,9 +355,14 @@ export function Projects() {
                           </Badge>
                         </td>
                         <td className="py-3 px-2">
-                          <button onClick={() => handleToggleActive(p.id, p.isActive)} className="text-amber-600 hover:text-amber-800 text-xs font-medium">
-                            {p.isActive ? 'Desactivar' : 'Activar'}
-                          </button>
+                          <div className="flex gap-2">
+                            <button onClick={() => openProjectDetail(p)} className="text-brand-600 hover:text-brand-800 text-xs font-medium flex items-center gap-1">
+                              <BarChart3 className="w-3 h-3" /> Detalle
+                            </button>
+                            <button onClick={() => handleToggleActive(p.id, p.isActive)} className="text-amber-600 hover:text-amber-800 text-xs font-medium">
+                              {p.isActive ? 'Desactivar' : 'Activar'}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
