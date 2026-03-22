@@ -40,6 +40,7 @@ export async function validationRoutes(app: FastifyInstance): Promise<void> {
       country: body.country,
       metadata: body.metadata,
       sandbox: isSandbox,
+      userAgent: request.headers['user-agent'],
     });
 
     if (result.status === 'KO') {

@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { useState } from 'react';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
@@ -7,11 +8,13 @@ import {
   Package,
   TestTube,
   BarChart3,
+  ShieldAlert,
   LogOut,
   ScanBarcode,
 } from 'lucide-react';
 import { setToken } from '../lib/api';
 import { cn } from '../lib/cn';
+import { HelpPanel, HelpToggle } from './HelpPanel';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -21,9 +24,13 @@ const navItems = [
   { to: '/batches', icon: Package, label: 'Lotes' },
   { to: '/tester', icon: TestTube, label: 'Code Tester' },
   { to: '/stats', icon: BarChart3, label: 'Stats' },
+  { to: '/fraud', icon: ShieldAlert, label: 'Fraude' },
 ];
 
 export function Layout() {
+  const [helpOpen, setHelpOpen] = useState(false);
+  const location = useLocation();
+
   return (
     <div className="flex h-screen">
       <aside className="w-64 bg-gray-900 text-white flex flex-col">
@@ -73,6 +80,9 @@ export function Layout() {
           <Outlet />
         </div>
       </main>
+
+      <HelpToggle onClick={() => setHelpOpen(true)} />
+      <HelpPanel isOpen={helpOpen} onClose={() => setHelpOpen(false)} currentPath={location.pathname} />
     </div>
   );
 }

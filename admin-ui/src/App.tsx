@@ -9,6 +9,7 @@ import { CodeRules } from './pages/CodeRules';
 import { CodeTester } from './pages/CodeTester';
 import { Batches } from './pages/Batches';
 import { Stats } from './pages/Stats';
+import { FraudDetection } from './pages/FraudDetection';
 import { getToken } from './lib/api';
 
 export default function App() {
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/batches" element={<Batches />} />
           <Route path="/tester" element={<CodeTester />} />
           <Route path="/stats" element={<Stats />} />
+          <Route path="/fraud" element={<FraudDetection />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -13,6 +13,9 @@ import { getCachedProjectWithRules } from '../../utils/cache.js';
 import { metrics } from '../../utils/metrics.js';
 import { randomUUID } from 'crypto';
 import { assessSecurity } from '../code-rules/security-linter.js';
+import { prisma } from '../../utils/prisma.js';
+import { lookupIp } from '../../utils/geoip.js';
+import { logger } from '../../utils/logger.js';
 
 export interface ValidateInput {
   code: string;
@@ -25,6 +28,7 @@ export interface ValidateInput {
   country?: string;
   dryRun?: boolean;
   sandbox?: boolean;
+  userAgent?: string;
 }
 
 /**
@@ -44,7 +48,37 @@ export async function runPipeline(input: ValidateInput): Promise<ValidationResul
   metrics.incrementCounter('omnicodex_validations_total', { status, error_code: errorCode, mode });
   metrics.observeHistogram('omnicodex_validation_duration_ms', duration, { status, mode });
 
+  // Fire-and-forget: log validation attempt for audit & fraud detection
+  if (!input.dryRun && !input.sandbox) {
+    logValidationAttempt(input, result).catch((err) =>
+      logger.warn({ err }, 'Failed to log validation attempt'),
+    );
+  }
+
   return result;
+}
+
+/** Persist validation attempt for audit trail and fraud detection */
+async function logValidationAttempt(input: ValidateInput, result: ValidationResult) {
+  const geo = input.ipAddress ? lookupIp(input.ipAddress) : null;
+  await prisma.validationAttempt.create({
+    data: {
+      projectId: input.projectId,
+      codeRuleId: result.status === 'OK' ? result.codeRule?.id : undefined,
+      tenantId: input.tenantId,
+      code: input.code.substring(0, 500),
+      status: result.status,
+      errorCode: result.status === 'KO' ? result.errorCode : undefined,
+      errorMessage: result.status === 'KO' ? result.errorMessage?.substring(0, 500) : undefined,
+      owUserId: input.owUserId,
+      ipAddress: input.ipAddress,
+      detectedCountry: geo?.country || (result.status === 'OK' ? result.detectedCountry : undefined),
+      detectedRegion: geo?.region,
+      detectedCity: geo?.city,
+      userAgent: input.userAgent?.substring(0, 500),
+      metadata: input.metadata as any,
+    },
+  });
 }
 
 async function executePipeline(input: ValidateInput): Promise<ValidationResult> {

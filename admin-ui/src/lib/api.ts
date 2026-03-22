@@ -120,6 +120,42 @@ export const stats = {
   adminProject: (projectId: string, days = 30) => request<any>(`/api/admin/stats/project/${projectId}?days=${days}`),
 };
 
+// --- Fraud Detection ---
+
+export const fraud = {
+  overview: (tenantId?: string, days = 7) => {
+    const qs = new URLSearchParams();
+    if (tenantId) qs.set('tenant_id', tenantId);
+    qs.set('days', String(days));
+    return request<any>(`/api/admin/fraud/overview?${qs}`);
+  },
+  attempts: (params: Record<string, any> = {}) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) { if (v) qs.set(k, String(v)); }
+    return request<any>(`/api/admin/fraud/attempts?${qs}`);
+  },
+  suspiciousIps: (tenantId?: string, days = 7, minAttempts = 5) => {
+    const qs = new URLSearchParams();
+    if (tenantId) qs.set('tenant_id', tenantId);
+    qs.set('days', String(days));
+    qs.set('min_attempts', String(minAttempts));
+    return request<any>(`/api/admin/fraud/suspicious-ips?${qs}`);
+  },
+  suspiciousUsers: (tenantId?: string, days = 7, minAttempts = 3) => {
+    const qs = new URLSearchParams();
+    if (tenantId) qs.set('tenant_id', tenantId);
+    qs.set('days', String(days));
+    qs.set('min_attempts', String(minAttempts));
+    return request<any>(`/api/admin/fraud/suspicious-users?${qs}`);
+  },
+  geoBlocked: (tenantId?: string, days = 30) => {
+    const qs = new URLSearchParams();
+    if (tenantId) qs.set('tenant_id', tenantId);
+    qs.set('days', String(days));
+    return request<any>(`/api/admin/fraud/geo-blocked?${qs}`);
+  },
+};
+
 // --- Health ---
 
 export const health = {
