@@ -28,4 +28,10 @@ export const config = {
 
   // If true, requests without detectable country are rejected when geo-fencing is active
   geoRequireCountry: process.env.GEO_REQUIRE_COUNTRY === 'true',
+
+  // Batch generation (MANAGED mode)
+  batchEncryptionKey: process.env.BATCH_ENCRYPTION_KEY || process.env.CODE_HASH_PEPPER || 'dev-pepper-change-in-production',
+  batchMaxConcurrentPerTenant: parseInt(process.env.BATCH_MAX_CONCURRENT_PER_TENANT || '3', 10),
+  batchChunkSize: parseInt(process.env.BATCH_CHUNK_SIZE || '5000', 10),
+  batchJobTimeoutMs: parseInt(process.env.BATCH_JOB_TIMEOUT_MS || '1800000', 10),
 } as const;

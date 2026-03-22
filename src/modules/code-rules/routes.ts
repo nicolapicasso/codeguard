@@ -32,6 +32,7 @@ export async function codeRuleRoutes(app: FastifyInstance): Promise<void> {
       points_value?: number;
       custom_check_function?: string;
       fabricant_secret?: string;
+      generation_mode?: 'EXTERNAL' | 'MANAGED';
       allowed_countries?: string[];
     };
 
@@ -74,6 +75,7 @@ export async function codeRuleRoutes(app: FastifyInstance): Promise<void> {
       pointsValue: body.points_value,
       customCheckFunction: body.custom_check_function,
       fabricantSecret: body.fabricant_secret,
+      generationMode: body.generation_mode as any,
       allowedCountries: body.allowed_countries,
     });
 
