@@ -29,7 +29,7 @@ export function Tenants() {
         .split(',')
         .map((c) => c.trim().toUpperCase())
         .filter((c) => c.length === 2);
-      await tenantsApi.create({
+      const created = await tenantsApi.create({
         ow_tenant_id: formData.ow_tenant_id,
         name: formData.name,
         webhook_url: formData.webhook_url || undefined,
@@ -37,6 +37,9 @@ export function Tenants() {
       });
       setShowForm(false);
       setFormData({ ow_tenant_id: '', name: '', webhook_url: '', banned_countries: '' });
+      // Show the generated API keys immediately
+      setSelectedTenant({ ...created, api_key: created.apiKey, api_secret: created.apiSecret });
+      setShowSecret(true);
       refetch();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error creating tenant');
@@ -147,11 +150,11 @@ export function Tenants() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                {selectedTenant.api_key && (
+                {(selectedTenant.api_key || selectedTenant.apiKey) && (
                   <>
                     <div>
                       <span className="font-medium text-gray-500">API Key:</span>
-                      <code className="ml-2 bg-gray-100 px-2 py-1 rounded text-xs break-all">{selectedTenant.api_key}</code>
+                      <code className="ml-2 bg-gray-100 px-2 py-1 rounded text-xs break-all">{selectedTenant.api_key || selectedTenant.apiKey}</code>
                     </div>
                     <div>
                       <span className="font-medium text-gray-500">API Secret:</span>
@@ -159,7 +162,7 @@ export function Tenants() {
                         {showSecret ? <EyeOff className="w-4 h-4 inline" /> : <Eye className="w-4 h-4 inline" />}
                       </button>
                       {showSecret && (
-                        <code className="ml-2 bg-gray-100 px-2 py-1 rounded text-xs break-all">{selectedTenant.api_secret}</code>
+                        <code className="ml-2 bg-gray-100 px-2 py-1 rounded text-xs break-all">{selectedTenant.api_secret || selectedTenant.apiSecret}</code>
                       )}
                     </div>
                   </>
