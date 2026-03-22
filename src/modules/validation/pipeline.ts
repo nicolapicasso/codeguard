@@ -7,6 +7,7 @@ import { validateSegments } from './segments.js';
 import { validateCheckDigit } from './check-digit/index.js';
 import { validateVigency } from './vigency.js';
 import { validateUniqueness } from './uniqueness.js';
+import { validateManagedRedemption } from './redemption-managed.js';
 import { validateGeoFencing } from './geo-fencing.js';
 import { getCachedProjectWithRules } from '../../utils/cache.js';
 import { metrics } from '../../utils/metrics.js';
@@ -199,17 +200,20 @@ async function tryRule(
     };
   }
 
-  // Phase 6: Uniqueness (skip if dry run)
+  // Phase 6: Uniqueness / Redemption (skip if dry run)
   if (!input.dryRun) {
-    const uniquenessResult = await validateUniqueness(
-      normalizedCode,
-      codeRule,
-      input.owUserId,
-      input.owTransactionId,
-      input.ipAddress,
-      input.metadata,
-      detectedCountry,
-    );
+    // Bifurcate based on generation mode: MANAGED uses inventory lookup, EXTERNAL uses INSERT
+    const uniquenessResult = codeRule.generationMode === 'MANAGED'
+      ? await validateManagedRedemption(normalizedCode, codeRule, input.owUserId)
+      : await validateUniqueness(
+          normalizedCode,
+          codeRule,
+          input.owUserId,
+          input.owTransactionId,
+          input.ipAddress,
+          input.metadata,
+          detectedCountry,
+        );
 
     if (uniquenessResult.error) return uniquenessResult.error;
 

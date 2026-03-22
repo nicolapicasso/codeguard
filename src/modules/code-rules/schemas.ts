@@ -19,6 +19,8 @@ export const createCodeRuleSchema = {
     campaign_info: { type: 'object' },
     points_value: { type: 'integer' },
     custom_check_function: { type: 'string' },
+    fabricant_secret: { type: 'string' },
+    generation_mode: { type: 'string', enum: ['EXTERNAL', 'MANAGED'] },
     allowed_countries: { type: 'array', items: { type: 'string', minLength: 2, maxLength: 2 } },
   },
 } as const;

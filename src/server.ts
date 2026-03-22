@@ -16,6 +16,7 @@ import { tenantRoutes } from './modules/tenants/routes.js';
 import { projectRoutes } from './modules/projects/routes.js';
 import { codeRuleRoutes } from './modules/code-rules/routes.js';
 import { auditRoutes } from './modules/audit/routes.js';
+import { adminBatchRoutes, publicBatchRoutes } from './modules/batch-generation/routes.js';
 import { authenticateAdmin, hashPassword } from './modules/auth/jwt.js';
 import { registerMetricsHooks, registerMetricsRoute } from './utils/metrics.js';
 
@@ -164,6 +165,8 @@ export async function buildApp() {
   await app.register(projectRoutes);
   await app.register(codeRuleRoutes);
   await app.register(auditRoutes);
+  await app.register(adminBatchRoutes);
+  await app.register(publicBatchRoutes);
 
   return app;
 }

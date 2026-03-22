@@ -1,4 +1,4 @@
-import type { Charset, CheckAlgorithm, CheckDigitPos, Prisma } from '@prisma/client';
+import type { Charset, CheckAlgorithm, CheckDigitPos, CodeGenerationMode, Prisma } from '@prisma/client';
 import { prisma } from '../../utils/prisma.js';
 import { invalidateProjectCache } from '../../utils/cache.js';
 
@@ -21,6 +21,7 @@ export interface CreateCodeRuleInput {
   pointsValue?: number;
   customCheckFunction?: string;
   fabricantSecret?: string;
+  generationMode?: CodeGenerationMode;
   allowedCountries?: string[];
 }
 
@@ -47,6 +48,7 @@ export async function createCodeRule(projectId: string, data: CreateCodeRuleInpu
       pointsValue: data.pointsValue,
       customCheckFunction: data.customCheckFunction,
       fabricantSecret: data.fabricantSecret,
+      generationMode: data.generationMode ?? 'EXTERNAL',
       allowedCountries: data.allowedCountries ?? [],
     },
   });

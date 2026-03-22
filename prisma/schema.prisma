@@ -41,32 +41,34 @@ model Project {
 }
 
 model CodeRule {
-  id                 String          @id @default(uuid())
-  projectId          String          @map("project_id")
-  project            Project         @relation(fields: [projectId], references: [id])
+  id                 String             @id @default(uuid())
+  projectId          String             @map("project_id")
+  project            Project            @relation(fields: [projectId], references: [id])
   name               String
-  skuReference       String?         @map("sku_reference")
-  totalLength        Int             @map("total_length")
+  skuReference       String?            @map("sku_reference")
+  generationMode     CodeGenerationMode @default(EXTERNAL) @map("generation_mode")
+  totalLength        Int                @map("total_length")
   charset            Charset
-  customCharset      String?         @map("custom_charset")
-  hasCheckDigit      Boolean         @map("has_check_digit")
-  checkAlgorithm     CheckAlgorithm? @map("check_algorithm")
-  checkDigitPosition CheckDigitPos?  @map("check_digit_position")
-  structureDef       Json            @map("structure_def")
+  customCharset      String?            @map("custom_charset")
+  hasCheckDigit      Boolean            @map("has_check_digit")
+  checkAlgorithm     CheckAlgorithm?    @map("check_algorithm")
+  checkDigitPosition CheckDigitPos?     @map("check_digit_position")
+  structureDef       Json               @map("structure_def")
   separator          String?
-  caseSensitive      Boolean         @default(false) @map("case_sensitive")
+  caseSensitive      Boolean            @default(false) @map("case_sensitive")
   prefix             String?
-  maxRedemptions     Int             @default(1) @map("max_redemptions")
-  productInfo        Json?           @map("product_info")
-  campaignInfo       Json?           @map("campaign_info")
-  pointsValue        Int?            @map("points_value")
-  customCheckFunction String?        @map("custom_check_function")
-  fabricantSecret    String?         @map("fabricant_secret")
-  allowedCountries   String[]        @default([]) @map("allowed_countries")
-  isActive           Boolean         @default(true) @map("is_active")
-  createdAt          DateTime        @default(now()) @map("created_at")
-  updatedAt          DateTime        @updatedAt @map("updated_at")
+  maxRedemptions     Int                @default(1) @map("max_redemptions")
+  productInfo        Json?              @map("product_info")
+  campaignInfo       Json?              @map("campaign_info")
+  pointsValue        Int?               @map("points_value")
+  customCheckFunction String?           @map("custom_check_function")
+  fabricantSecret    String?            @map("fabricant_secret")
+  allowedCountries   String[]           @default([]) @map("allowed_countries")
+  isActive           Boolean            @default(true) @map("is_active")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
   redeemedCodes      RedeemedCode[]
+  codeBatches        CodeBatch[]
 
   @@map("code_rules")
 }
@@ -90,6 +92,80 @@ model RedeemedCode {
   @@index([owUserId])
   @@index([redeemedAt])
   @@map("redeemed_codes")
+}
+
+// --- Generación Gestionada (modo MANAGED) ---
+
+model CodeBatch {
+  id              String       @id @default(uuid())
+  codeRuleId      String       @map("code_rule_id")
+  codeRule        CodeRule     @relation(fields: [codeRuleId], references: [id])
+  batchSize       Int          @map("batch_size")
+  generatedCount  Int          @default(0) @map("generated_count")
+  status          BatchStatus  @default(PENDING)
+  format          BatchFormat  @default(PIN)
+  label           String?
+  expiresAt       DateTime?    @map("expires_at")
+  downloadCount   Int          @default(0) @map("download_count")
+  lastDownloadAt  DateTime?    @map("last_download_at")
+  errorMessage    String?      @map("error_message")
+  createdBy       String?      @map("created_by")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  completedAt     DateTime?    @map("completed_at")
+  issuedCodes     IssuedCode[]
+
+  @@index([codeRuleId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("code_batches")
+}
+
+model IssuedCode {
+  id              String           @id @default(uuid())
+  batchId         String           @map("batch_id")
+  batch           CodeBatch        @relation(fields: [batchId], references: [id])
+  codeHash        String           @map("code_hash") @db.VarChar(64)
+  codeEncrypted   String           @map("code_encrypted")
+  status          IssuedCodeStatus @default(ACTIVE)
+  redeemedAt      DateTime?        @map("redeemed_at")
+  redeemedByUser  String?          @map("redeemed_by_user")
+  redemptionCount Int              @default(0) @map("redemption_count")
+  createdAt       DateTime         @default(now()) @map("created_at")
+
+  @@unique([batchId, codeHash])
+  @@index([codeHash])
+  @@index([status])
+  @@map("issued_codes")
+}
+
+// --- Enums ---
+
+enum CodeGenerationMode {
+  EXTERNAL
+  MANAGED
+}
+
+enum BatchStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+  CANCELLED
+  SEALED
+}
+
+enum BatchFormat {
+  PIN
+  CSV
+  JSON
+}
+
+enum IssuedCodeStatus {
+  ACTIVE
+  REDEEMED
+  EXPIRED
+  REVOKED
 }
 
 enum Charset {
