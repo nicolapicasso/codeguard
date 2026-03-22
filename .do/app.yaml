@@ -63,11 +63,15 @@ services:
         value: ""
       - key: GEO_REQUIRE_COUNTRY
         value: "false"
-    routes:
+  routes:
       - path: /api
+        preserve_path_prefix: true
       - path: /health
+        preserve_path_prefix: true
       - path: /docs
+        preserve_path_prefix: true
       - path: /metrics
+        preserve_path_prefix: true
 
   # ── Admin UI ───────────────────────────────────────────
   - name: admin-ui
