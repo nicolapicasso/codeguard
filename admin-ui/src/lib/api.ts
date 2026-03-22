@@ -115,6 +115,9 @@ export const batches = {
 
 export const stats = {
   project: (projectId: string) => request<any>(`/api/v1/stats/${projectId}`),
+  overview: () => request<any>('/api/admin/stats/overview'),
+  tenant: (tenantId: string, days = 30) => request<any>(`/api/admin/stats/tenant/${tenantId}?days=${days}`),
+  adminProject: (projectId: string, days = 30) => request<any>(`/api/admin/stats/project/${projectId}?days=${days}`),
 };
 
 // --- Health ---

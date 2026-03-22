@@ -12,6 +12,7 @@ import { requestLogger } from './middleware/request-logger.js';
 import { registerRateLimiter } from './middleware/rate-limiter.js';
 import { validationRoutes } from './modules/validation/routes.js';
 import { statsRoutes } from './modules/stats/routes.js';
+import { adminStatsRoutes } from './modules/stats/admin-routes.js';
 import { tenantRoutes } from './modules/tenants/routes.js';
 import { projectRoutes } from './modules/projects/routes.js';
 import { codeRuleRoutes } from './modules/code-rules/routes.js';
@@ -161,6 +162,7 @@ export async function buildApp() {
   // Routes
   await app.register(validationRoutes);
   await app.register(statsRoutes);
+  await app.register(adminStatsRoutes);
   await app.register(tenantRoutes);
   await app.register(projectRoutes);
   await app.register(codeRuleRoutes);
